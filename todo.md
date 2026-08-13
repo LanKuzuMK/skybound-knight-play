@@ -41,3 +41,6 @@
 - [x] Add a one-time New Record ribbon animation above the gameplay HUD.
 - [x] Add persistent subtle and vivid celebration-intensity choices in settings.
 - [x] Verify the UI and preference behavior, deploy, and checkpoint the refinement.
+- [x] Create a custom seamless lo-fi acoustic background-music loop for the game.
+- [x] Integrate looping BGM playback and persistent audio controls without disrupting sound effects.
+- [ ] Validate browser audio behavior, deploy the BGM update, and save a checkpoint.

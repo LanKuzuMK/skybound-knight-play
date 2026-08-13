@@ -1,6 +1,6 @@
 /**
  * Dawnveil Reverie: a luminous, handcrafted fantasy ascent. UI is airy editorial
- * framing; gameplay readability wins over ornament; motion, clean sound, and responsive armory feedback stay tactile and precise.
+ * framing; gameplay readability wins over ornament; motion, lo-fi acoustic sound, and responsive armory feedback stay tactile and precise.
  */
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +39,7 @@ type KnightStyle = {
 
 type LocalProfile = { name: string; points: number; best: number; unlocked: string[]; selected: string; celebrationIntensity: CelebrationIntensity };
 type AudioGraph = { master: GainNode; compressor: DynamicsCompressorNode; active: Set<OscillatorNode | AudioBufferSourceNode>; lastByKey: Map<string, number> };
+type BgmState = { gain: GainNode; timer: number | null; voices: Set<OscillatorNode | AudioBufferSourceNode>; nextBarAt: number; bar: number };
 
 type Platform = {
   id: number;
@@ -184,8 +185,7 @@ export default function Home() {
   const artRef = useRef<Record<string, HTMLImageElement>>({});
   const audioRef = useRef<AudioContext | null>(null);
   const audioGraphRef = useRef<AudioGraph | null>(null);
-  const ambientRef = useRef<{ gain: GainNode; oscillators: OscillatorNode[] } | null>(null);
-  const melodyTimerRef = useRef<number | null>(null);
+  const bgmRef = useRef<BgmState | null>(null);
   const worldRef = useRef<World>({
     player: { x: 500, y: 95, vx: 0, vy: 0, squash: 0, landing: 0, boostAvailable: true },
     platforms: [], particles: [], cameraY: 0, highestY: 0, nextPlatformId: 1, lastHudAt: 0, lastTrailAt: 0, t: 0, shake: 0, runRewarded: false,
@@ -209,8 +209,8 @@ export default function Home() {
   useEffect(() => {
     mutedRef.current = muted;
     try { window.localStorage.setItem("skybound-muted", String(muted)); } catch { /* local storage is optional */ }
-    if (ambientRef.current) {
-      ambientRef.current.gain.gain.setTargetAtTime(muted || screenRef.current !== "playing" ? 0 : 0.025, audioRef.current?.currentTime || 0, 0.12);
+    if (bgmRef.current) {
+      bgmRef.current.gain.gain.setTargetAtTime(muted || screenRef.current !== "playing" ? 0 : 0.048, audioRef.current?.currentTime || 0, 0.16);
     }
   }, [muted]);
 
@@ -328,41 +328,119 @@ export default function Home() {
     window.setTimeout(() => playTone(1046.5, 0.42, "sine", 0.018, 1318.51, "record-air", 0.7), 164);
   }, [playNoise, playTone]);
 
-  const startAmbient = useCallback(() => {
-    const context = audioContext();
-    if (!context) return;
-    if (!ambientRef.current) {
+  const scheduleBgmNote = useCallback((context: AudioContext, bgm: BgmState, frequency: number, startAt: number, seconds: number, volume: number, type: OscillatorType = "triangle") => {
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(type === "sine" ? 2800 : 1800, startAt);
+    filter.Q.value = 0.65;
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.028);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.24), startAt + Math.min(0.24, seconds * 0.42));
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + seconds);
+    if (type === "triangle") {
+      const length = Math.ceil(context.sampleRate * seconds);
+      const buffer = context.createBuffer(1, length, context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let index = 0; index < length; index += 1) {
+        const time = index / context.sampleRate;
+        const envelope = Math.exp(-4.7 * time);
+        const pluck = (Math.random() * 2 - 1) * Math.exp(-32 * time);
+        const string = Math.sin(Math.PI * 2 * frequency * time) * 0.68
+          + Math.sin(Math.PI * 2 * frequency * 2.01 * time) * 0.18
+          + Math.sin(Math.PI * 2 * frequency * 3.97 * time) * 0.07;
+        data[index] = (string + pluck) * envelope;
+      }
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(filter).connect(gain).connect(bgm.gain);
+      bgm.voices.add(source);
+      source.onended = () => bgm.voices.delete(source);
+      source.start(startAt);
+      return;
+    }
+    const oscillator = context.createOscillator();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, startAt);
+    oscillator.connect(filter).connect(gain).connect(bgm.gain);
+    bgm.voices.add(oscillator);
+    oscillator.onended = () => bgm.voices.delete(oscillator);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + seconds + 0.03);
+  }, []);
+
+  const scheduleBgmBrush = useCallback((context: AudioContext, bgm: BgmState, startAt: number, volume: number) => {
+    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * 0.085), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let index = 0; index < data.length; index += 1) data[index] = (Math.random() * 2 - 1) * (1 - index / data.length);
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    filter.type = "highpass";
+    filter.frequency.value = 1300;
+    gain.gain.setValueAtTime(volume, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.08);
+    source.connect(filter).connect(gain).connect(bgm.gain);
+    bgm.voices.add(source);
+    source.onended = () => bgm.voices.delete(source);
+    source.start(startAt);
+  }, []);
+
+  const startBgm = useCallback(() => {
+    const audio = getAudioGraph();
+    if (!audio) return;
+    const { context, graph } = audio;
+    if (!bgmRef.current) {
       const gain = context.createGain();
       gain.gain.value = 0;
-      gain.connect(getAudioGraph()?.graph.master || context.destination);
-      const frequencies = [110, 164.81];
-      const oscillators = frequencies.map((frequency, index) => {
-        const oscillator = context.createOscillator();
-        oscillator.type = index ? "sine" : "triangle";
-        oscillator.frequency.value = frequency;
-        oscillator.detune.value = index ? 4 : -6;
-        oscillator.connect(gain);
-        oscillator.start();
-        return oscillator;
-      });
-      ambientRef.current = { gain, oscillators };
+      gain.connect(graph.compressor);
+      bgmRef.current = { gain, timer: null, voices: new Set(), nextBarAt: 0, bar: 0 };
     }
-    ambientRef.current.gain.gain.setTargetAtTime(mutedRef.current ? 0 : 0.025, context.currentTime, 0.18);
-    if (!melodyTimerRef.current) {
-      let step = 0;
-      const melody = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 392];
-      melodyTimerRef.current = window.setInterval(() => {
-        if (screenRef.current !== "playing" || mutedRef.current) return;
-        playTone(melody[step % melody.length], 0.55, "sine", 0.018, melody[step % melody.length] * 1.04);
-        if (step % 4 === 2) playTone(melody[(step + 2) % melody.length] * 2, 0.18, "sine", 0.009);
-        step += 1;
-      }, 560);
-    }
-  }, [audioContext, getAudioGraph, playTone]);
+    const bgm = bgmRef.current;
+    bgm.gain.gain.setTargetAtTime(mutedRef.current ? 0 : 0.048, context.currentTime, 0.22);
+    if (bgm.timer !== null) return;
 
-  const silenceAmbient = useCallback(() => {
+    const barSeconds = 60 / 78 * 4;
+    const chords = [
+      [146.83, 185, 220, 293.66], // D major
+      [123.47, 146.83, 185, 246.94], // B minor
+      [98, 123.47, 146.83, 196], // G major
+      [110, 138.59, 164.81, 220], // A major
+    ];
+    const scheduleBar = () => {
+      const startAt = Math.max(context.currentTime + 0.06, bgm.nextBarAt || context.currentTime + 0.1);
+      const chord = chords[bgm.bar % chords.length];
+      const strumOffsets = [0.02, 0.12, 0.23, 0.5, 1.07, 1.62, 2.16, 2.7];
+      const voicings = [1, 2, 3, 2, 1, 2, 3, 2];
+      strumOffsets.forEach((offset, index) => {
+        const note = chord[voicings[index]];
+        scheduleBgmNote(context, bgm, note, startAt + offset, index === 3 || index === 7 ? 0.74 : 0.46, index === 3 || index === 7 ? 0.051 : 0.038);
+        if (index === 0 || index === 4) scheduleBgmNote(context, bgm, chord[0], startAt + offset, 0.7, 0.052, "sine");
+        if (index % 2 === 0) scheduleBgmBrush(context, bgm, startAt + offset + 0.02, 0.008);
+      });
+      if (bgm.bar % 2 === 1) scheduleBgmNote(context, bgm, chord[3] * 2, startAt + 2.3, 0.42, 0.018, "sine");
+      bgm.nextBarAt = startAt + barSeconds;
+      bgm.bar += 1;
+    };
+    scheduleBar();
+    scheduleBar();
+    bgm.timer = window.setInterval(scheduleBar, Math.round(barSeconds * 1000));
+  }, [getAudioGraph, scheduleBgmBrush, scheduleBgmNote]);
+
+  const pauseBgm = useCallback(() => {
     const context = audioRef.current;
-    if (ambientRef.current && context) ambientRef.current.gain.gain.setTargetAtTime(0, context.currentTime, 0.08);
+    const bgm = bgmRef.current;
+    if (!context || !bgm) return;
+    bgm.gain.gain.setTargetAtTime(0, context.currentTime, 0.08);
+    if (bgm.timer !== null) window.clearInterval(bgm.timer);
+    bgm.timer = null;
+    bgm.nextBarAt = 0;
+    const fadingVoices = Array.from(bgm.voices);
+    bgm.voices.clear();
+    window.setTimeout(() => {
+      fadingVoices.forEach((voice) => { try { voice.stop(); } catch { /* voice has already ended */ } });
+    }, 120);
   }, []);
 
   const makePlatform = useCallback((world: World, previous?: Platform) => {
@@ -414,26 +492,26 @@ export default function Home() {
     modalRef.current = "none";
     setModal("none");
     setScreen("playing");
-    startAmbient();
+    startBgm();
     playTone(440, 0.12, "sine", 0.04, 660);
-  }, [playTone, resetWorld, startAmbient]);
+  }, [playTone, resetWorld, startBgm]);
 
   const pauseRun = useCallback(() => {
     if (screenRef.current !== "playing") return;
     screenRef.current = "paused";
     setScreen("paused");
-    silenceAmbient();
+    pauseBgm();
     playTone(293.66, 0.1, "sine", 0.035, 220);
-  }, [playTone, silenceAmbient]);
+  }, [pauseBgm, playTone]);
 
   const resumeRun = useCallback(() => {
     screenRef.current = "playing";
     modalRef.current = "none";
     setModal("none");
     setScreen("playing");
-    startAmbient();
+    startBgm();
     playTone(392, 0.12, "sine", 0.035, 523.25);
-  }, [playTone, startAmbient]);
+  }, [playTone, startBgm]);
 
   const openSettings = useCallback(() => {
     if (screenRef.current === "playing") pauseRun();
@@ -706,7 +784,7 @@ export default function Home() {
         }
         screenRef.current = "gameover";
         setScreen("gameover");
-        silenceAmbient();
+        pauseBgm();
         playNoise(0.16, 0.027, 720, "fall-noise", 0.18);
         playTone(311.13, 0.36, "triangle", 0.055, 120);
       }
@@ -1014,18 +1092,22 @@ export default function Home() {
     };
     frameRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(frameRef.current); observer.disconnect(); };
-  }, [makePlatform, playNewRecordSound, playNoise, playTone, silenceAmbient]);
+  }, [makePlatform, pauseBgm, playNewRecordSound, playNoise, playTone]);
 
   useEffect(() => () => {
-    if (melodyTimerRef.current) window.clearInterval(melodyTimerRef.current);
-    ambientRef.current?.oscillators.forEach((oscillator) => oscillator.stop());
+    const bgm = bgmRef.current;
+    if (bgm && bgm.timer !== null) window.clearInterval(bgm.timer);
+    if (bgm) bgm.voices.forEach((voice) => { try { voice.stop(); } catch { /* voice has already ended */ } });
   }, []);
 
   const toggleMute = () => {
     const nextMuted = !mutedRef.current;
     mutedRef.current = nextMuted;
     setMuted(nextMuted);
-    if (!nextMuted) playTone(660, 0.08, "sine", 0.03);
+    if (!nextMuted) {
+      if (screenRef.current === "playing") startBgm();
+      playTone(660, 0.08, "sine", 0.03);
+    }
   };
 
   const setCelebrationIntensity = (celebrationIntensity: CelebrationIntensity) => {
@@ -1077,6 +1159,7 @@ export default function Home() {
           {screen === "playing" && <button className="round-control" onClick={pauseRun} aria-label="Pause game"><Pause size={17} /></button>}
           <button className="round-control" onClick={openShop} aria-label="Open style shop"><Store size={17} /></button>
           <button className="round-control" onClick={openProfile} aria-label="Open player profile"><UserRound size={17} /></button>
+          <button className={`round-control audio-control ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-label={muted ? "Turn game audio on" : "Mute game audio"} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
           <button className="round-control" onClick={screen === "menu" ? showSettingsFromMenu : openSettings} aria-label="Open settings"><Settings size={17} /></button>
         </div>
       </header>
@@ -1131,7 +1214,7 @@ export default function Home() {
             <h2 id="settings-title">Set your course</h2>
             <p className="modal-intro">Your preferences stay with you, even after the clouds drift away.</p>
             <div className="setting-row">
-              <div><strong>Soundscape</strong><span>{muted ? "Muted — visuals remain fully readable" : "Dreamy sky audio is on"}</span></div>
+              <div><strong>Soundscape</strong><span>{muted ? "Muted — visuals remain fully readable" : "Lo-fi guitar, sky texture, and effects are on"}</span></div>
               <Button className={`sound-toggle ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}{muted ? "Muted" : "Sound on"}</Button>
             </div>
             <div className="setting-row celebration-setting">
