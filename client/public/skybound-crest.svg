@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Skybound Knight crest">
+  <defs>
+    <radialGradient id="sky" cx="35%" cy="28%" r="75%">
+      <stop offset="0" stop-color="#83a6db"/>
+      <stop offset="0.58" stop-color="#3f6eb6"/>
+      <stop offset="1" stop-color="#244e92"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.8" stdDeviation="1.3" flood-color="#153f7c" flood-opacity=".38"/>
+    </filter>
+  </defs>
+  <circle cx="32" cy="32" r="29" fill="#fbf2c9"/>
+  <circle cx="32" cy="32" r="26" fill="url(#sky)" stroke="#dcae3d" stroke-width="2"/>
+  <circle cx="32" cy="32" r="20" fill="none" stroke="#dfeefe" stroke-opacity=".58" stroke-width="1.2"/>
+  <g filter="url(#soft)">
+    <path d="M32 12l5.1 14.9L52 32l-14.9 5.1L32 52l-5.1-14.9L12 32l14.9-5.1z" fill="#ffe99a" stroke="#fff8d0" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M32 18l2.8 11.2L46 32l-11.2 2.8L32 46l-2.8-11.2L18 32l11.2-2.8z" fill="#fff7d2"/>
+  </g>
+  <circle cx="32" cy="32" r="3" fill="#d19728"/>
+  <path d="M32 7v5M32 52v5M7 32h5M52 32h5" stroke="#fff5c9" stroke-width="1.7" stroke-linecap="round" opacity=".9"/>
+</svg>
