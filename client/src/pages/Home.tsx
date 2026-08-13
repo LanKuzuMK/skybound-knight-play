@@ -76,7 +76,7 @@ type World = {
 const ART = {
   menu: "/manus-storage/skybound-menu-sky_f3f3d42c.jpg",
   sky: "/manus-storage/skybound-game-sky_36ed0a53.jpg",
-  castle: "/manus-storage/skybound-castle-horizon_d6571e75.jpg",
+  castle: "/manus-storage/skybound-sky-lore-castle_18d63b6f.jpg",
   mark: "/manus-storage/skybound-compass-mark_04c7d693.png",
 };
 
