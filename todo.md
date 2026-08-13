@@ -35,4 +35,4 @@
 - [x] Push the favicon update to main and confirm the Cloudflare Pages refresh.
 - [x] Audit and remove altitude-step audio that fires during normal climbing.
 - [x] Add a guarded one-time new-record milestone sound with a premium finish.
-- [ ] Verify the behavior, deploy the audio update, and save a checkpoint.
+- [x] Verify the behavior, deploy the audio update, and save a checkpoint.
