@@ -1322,19 +1322,21 @@ export default function Home() {
             <div className="castle-beacon" />
             <div className="ascent-thread"><span /><span /><span /><span /></div>
             <div className="route-platform platform-one" /><div className="route-platform platform-two" /><div className="route-platform platform-three" /><div className="route-platform platform-four" />
+            <div className="journey-knight" aria-hidden="true"><i /><b /><span /></div>
             <div className="compass-pip pip-one">✦</div><div className="compass-pip pip-two">✦</div>
           </div>
           <div className="menu-copy">
             <p className="eyebrow"><Cloud size={15} /> AN ENDLESS ASCENT</p>
+            <div className="menu-title-mark" aria-hidden="true"><span>✦</span><i /></div>
             <h1>Skybound<br /><em>Knight</em></h1>
             <p className="menu-tagline">Keep your courage above the weather.</p>
             <div className="menu-actions">
               <Button className="sky-button sky-button-primary" onClick={beginRun}><Play size={18} fill="currentColor" /> Begin the climb</Button>
               <div className="menu-secondary-actions">
-                <Button variant="outline" className="sky-button sky-button-quiet" onClick={showSettingsFromMenu}><Settings size={16} /> Settings</Button>
-                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openAbout}><Info size={16} /> About</Button>
-                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openShop}><Store size={16} /> Style shop</Button>
-                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openProfile}><UserRound size={16} /> {profile.name}</Button>
+                <Button variant="outline" className="sky-button sky-button-quiet" onClick={showSettingsFromMenu}><Settings size={16} /> Field notes</Button>
+                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openAbout}><Info size={16} /> Sky lore</Button>
+                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openShop}><Store size={16} /> Armory</Button>
+                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openProfile}><UserRound size={16} /> Pilot log</Button>
               </div>
             </div>
             <div className="menu-stats"><div className="menu-best"><Trophy size={15} /><span>Highest horizon</span><strong>{hud.best.toLocaleString()} m</strong></div><div className="menu-wallet"><Sparkles size={14} /><span>Height points</span><strong>{profile.points.toLocaleString()}</strong></div></div>
