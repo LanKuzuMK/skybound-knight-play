@@ -37,4 +37,4 @@
 - [x] Add a guarded one-time new-record milestone sound with a premium finish.
 - [x] Verify the behavior, deploy the audio update, and save a checkpoint.
 - [x] Design and add a one-time record-break particle burst.
-- [ ] Validate, deploy, and checkpoint the record celebration update.
+- [x] Validate, deploy, and checkpoint the record celebration update.
