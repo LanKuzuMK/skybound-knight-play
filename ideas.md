@@ -66,3 +66,5 @@ The wordmark pairs a softly engraved serif title with a four-point **compass-sta
 ## Style Decisions
 
 Every primary game screen now carries an unmistakable Skybound marker through the compass-star shield, a luminous horizon castle, or gold-contoured paper-cut clouds. The main menu uses a framed vertical expedition route, with safe platforms and a readable knight silhouette arranged as an ascent rather than a conventional landing-page hero.
+
+Secondary controls use parchment, enamel-blue, and fine-gold material language rather than generic application chrome. The compass-star shield now recurs on commands, score readouts, and ascent moments, while the expedition window preserves a readable progression from lower mist through cloud platforms to an illuminated upper horizon.
