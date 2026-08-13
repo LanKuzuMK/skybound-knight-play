@@ -44,3 +44,7 @@
 - [x] Create a custom seamless lo-fi acoustic background-music loop for the game.
 - [x] Integrate looping BGM playback and persistent audio controls without disrupting sound effects.
 - [x] Validate browser audio behavior, deploy the BGM update, and save a checkpoint.
+- [x] Add persistent independent Music and SFX volume controls in settings.
+- [x] Add a smooth high-altitude night-sky BGM arrangement transition.
+- [x] Add a restrained beat-responsive HUD equalizer for the background music.
+- [ ] Validate, deploy, and checkpoint the adaptive audio experience.

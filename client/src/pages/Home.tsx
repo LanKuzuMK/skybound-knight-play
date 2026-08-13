@@ -3,6 +3,7 @@
  * framing; gameplay readability wins over ornament; motion, lo-fi acoustic sound, and responsive armory feedback stay tactile and precise.
  */
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import {
   ChevronLeft,
   Cloud,
@@ -38,8 +39,8 @@ type KnightStyle = {
 };
 
 type LocalProfile = { name: string; points: number; best: number; unlocked: string[]; selected: string; celebrationIntensity: CelebrationIntensity };
-type AudioGraph = { master: GainNode; compressor: DynamicsCompressorNode; active: Set<OscillatorNode | AudioBufferSourceNode>; lastByKey: Map<string, number> };
-type BgmState = { gain: GainNode; timer: number | null; voices: Set<OscillatorNode | AudioBufferSourceNode>; nextBarAt: number; bar: number };
+type AudioGraph = { master: GainNode; compressor: DynamicsCompressorNode; sfx: GainNode; active: Set<OscillatorNode | AudioBufferSourceNode>; lastByKey: Map<string, number> };
+type BgmState = { dayGain: GainNode; nightGain: GainNode; timer: number | null; voices: Set<OscillatorNode | AudioBufferSourceNode>; nextBarAt: number; bar: number };
 
 type Platform = {
   id: number;
@@ -142,6 +143,17 @@ function getStoredNumber(key: string) {
   }
 }
 
+function getStoredVolume(key: string, fallback: number) {
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (stored === null) return fallback;
+    const value = Number(stored);
+    return Number.isFinite(value) ? clamp(Math.round(value), 0, 100) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function loadProfile(): LocalProfile {
   try {
     const saved = window.localStorage.getItem(PROFILE_STORAGE_KEY);
@@ -198,6 +210,13 @@ export default function Home() {
   const [muted, setMuted] = useState(() => {
     try { return window.localStorage.getItem("skybound-muted") === "true"; } catch { return false; }
   });
+  const [musicVolume, setMusicVolume] = useState(() => getStoredVolume("skybound-music-volume", 58));
+  const [sfxVolume, setSfxVolume] = useState(() => getStoredVolume("skybound-sfx-volume", 76));
+  const musicVolumeRef = useRef(musicVolume);
+  const sfxVolumeRef = useRef(sfxVolume);
+  const nightSkyRef = useRef(false);
+  const [nightSky, setNightSky] = useState(false);
+  const [musicPulse, setMusicPulse] = useState(0);
   const [isTouch, setIsTouch] = useState(isTouchFirst);
   const [hud, setHud] = useState({ current: 0, best: profile.best });
   const [recordFlash, setRecordFlash] = useState(false);
@@ -209,10 +228,32 @@ export default function Home() {
   useEffect(() => {
     mutedRef.current = muted;
     try { window.localStorage.setItem("skybound-muted", String(muted)); } catch { /* local storage is optional */ }
+    const contextTime = audioRef.current?.currentTime || 0;
     if (bgmRef.current) {
-      bgmRef.current.gain.gain.setTargetAtTime(muted || screenRef.current !== "playing" ? 0 : 0.048, audioRef.current?.currentTime || 0, 0.16);
+      const level = muted || screenRef.current !== "playing" ? 0 : musicVolumeRef.current / 100;
+      bgmRef.current.dayGain.gain.setTargetAtTime(level * (nightSkyRef.current ? 0.018 : 0.048), contextTime, 0.16);
+      bgmRef.current.nightGain.gain.setTargetAtTime(level * (nightSkyRef.current ? 0.034 : 0), contextTime, 0.16);
     }
+    if (audioGraphRef.current) audioGraphRef.current.sfx.gain.setTargetAtTime(muted ? 0 : sfxVolumeRef.current / 100, contextTime, 0.12);
   }, [muted]);
+
+  useEffect(() => {
+    musicVolumeRef.current = musicVolume;
+    try { window.localStorage.setItem("skybound-music-volume", String(musicVolume)); } catch { /* local storage is optional */ }
+    const context = audioRef.current;
+    const bgm = bgmRef.current;
+    if (context && bgm) {
+      const level = mutedRef.current || screenRef.current !== "playing" ? 0 : musicVolume / 100;
+      bgm.dayGain.gain.setTargetAtTime(level * (nightSkyRef.current ? 0.018 : 0.048), context.currentTime, 0.12);
+      bgm.nightGain.gain.setTargetAtTime(level * (nightSkyRef.current ? 0.034 : 0), context.currentTime, 0.12);
+    }
+  }, [musicVolume]);
+
+  useEffect(() => {
+    sfxVolumeRef.current = sfxVolume;
+    try { window.localStorage.setItem("skybound-sfx-volume", String(sfxVolume)); } catch { /* local storage is optional */ }
+    if (audioGraphRef.current) audioGraphRef.current.sfx.gain.setTargetAtTime(mutedRef.current ? 0 : sfxVolume / 100, audioRef.current?.currentTime || 0, 0.1);
+  }, [sfxVolume]);
 
   useEffect(() => {
     profileRef.current = profile;
@@ -254,15 +295,18 @@ export default function Home() {
     if (!context) return null;
     if (!audioGraphRef.current) {
       const master = context.createGain();
+      const sfx = context.createGain();
       const compressor = context.createDynamicsCompressor();
       master.gain.value = 0.46;
+      sfx.gain.value = mutedRef.current ? 0 : sfxVolumeRef.current / 100;
       compressor.threshold.value = -18;
       compressor.knee.value = 18;
       compressor.ratio.value = 7;
       compressor.attack.value = 0.008;
       compressor.release.value = 0.16;
+      sfx.connect(master);
       master.connect(compressor).connect(context.destination);
-      audioGraphRef.current = { master, compressor, active: new Set(), lastByKey: new Map() };
+      audioGraphRef.current = { master, compressor, sfx, active: new Set(), lastByKey: new Map() };
     }
     return { context, graph: audioGraphRef.current };
   }, [audioContext]);
@@ -283,7 +327,7 @@ export default function Home() {
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(volume, now + Math.min(0.014, seconds * 0.22));
     gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
-    oscillator.connect(gain).connect(graph.master);
+    oscillator.connect(gain).connect(graph.sfx);
     graph.active.add(oscillator);
     oscillator.onended = () => graph.active.delete(oscillator);
     oscillator.start(now);
@@ -310,7 +354,7 @@ export default function Home() {
     gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
     source.buffer = buffer;
-    source.connect(filter).connect(gain).connect(graph.master);
+    source.connect(filter).connect(gain).connect(graph.sfx);
     graph.active.add(source);
     source.onended = () => graph.active.delete(source);
     source.start(now);
@@ -328,7 +372,7 @@ export default function Home() {
     window.setTimeout(() => playTone(1046.5, 0.42, "sine", 0.018, 1318.51, "record-air", 0.7), 164);
   }, [playNoise, playTone]);
 
-  const scheduleBgmNote = useCallback((context: AudioContext, bgm: BgmState, frequency: number, startAt: number, seconds: number, volume: number, type: OscillatorType = "triangle") => {
+  const scheduleBgmNote = useCallback((context: AudioContext, bgm: BgmState, frequency: number, startAt: number, seconds: number, volume: number, type: OscillatorType = "triangle", arrangement: "day" | "night" = "day") => {
     const filter = context.createBiquadFilter();
     const gain = context.createGain();
     filter.type = "lowpass";
@@ -338,6 +382,7 @@ export default function Home() {
     gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.028);
     gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * 0.24), startAt + Math.min(0.24, seconds * 0.42));
     gain.gain.exponentialRampToValueAtTime(0.0001, startAt + seconds);
+    const destination = arrangement === "night" ? bgm.nightGain : bgm.dayGain;
     if (type === "triangle") {
       const length = Math.ceil(context.sampleRate * seconds);
       const buffer = context.createBuffer(1, length, context.sampleRate);
@@ -353,7 +398,7 @@ export default function Home() {
       }
       const source = context.createBufferSource();
       source.buffer = buffer;
-      source.connect(filter).connect(gain).connect(bgm.gain);
+      source.connect(filter).connect(gain).connect(destination);
       bgm.voices.add(source);
       source.onended = () => bgm.voices.delete(source);
       source.start(startAt);
@@ -362,7 +407,7 @@ export default function Home() {
     const oscillator = context.createOscillator();
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, startAt);
-    oscillator.connect(filter).connect(gain).connect(bgm.gain);
+    oscillator.connect(filter).connect(gain).connect(destination);
     bgm.voices.add(oscillator);
     oscillator.onended = () => bgm.voices.delete(oscillator);
     oscillator.start(startAt);
@@ -381,7 +426,7 @@ export default function Home() {
     filter.frequency.value = 1300;
     gain.gain.setValueAtTime(volume, startAt);
     gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.08);
-    source.connect(filter).connect(gain).connect(bgm.gain);
+    source.connect(filter).connect(gain).connect(bgm.dayGain);
     bgm.voices.add(source);
     source.onended = () => bgm.voices.delete(source);
     source.start(startAt);
@@ -392,13 +437,18 @@ export default function Home() {
     if (!audio) return;
     const { context, graph } = audio;
     if (!bgmRef.current) {
-      const gain = context.createGain();
-      gain.gain.value = 0;
-      gain.connect(graph.compressor);
-      bgmRef.current = { gain, timer: null, voices: new Set(), nextBarAt: 0, bar: 0 };
+      const dayGain = context.createGain();
+      const nightGain = context.createGain();
+      dayGain.gain.value = 0;
+      nightGain.gain.value = 0;
+      dayGain.connect(graph.compressor);
+      nightGain.connect(graph.compressor);
+      bgmRef.current = { dayGain, nightGain, timer: null, voices: new Set(), nextBarAt: 0, bar: 0 };
     }
     const bgm = bgmRef.current;
-    bgm.gain.gain.setTargetAtTime(mutedRef.current ? 0 : 0.048, context.currentTime, 0.22);
+    const level = mutedRef.current ? 0 : musicVolumeRef.current / 100;
+    bgm.dayGain.gain.setTargetAtTime(level * (nightSkyRef.current ? 0.018 : 0.048), context.currentTime, 0.22);
+    bgm.nightGain.gain.setTargetAtTime(level * (nightSkyRef.current ? 0.034 : 0), context.currentTime, 0.22);
     if (bgm.timer !== null) return;
 
     const barSeconds = 60 / 78 * 4;
@@ -420,6 +470,11 @@ export default function Home() {
         if (index % 2 === 0) scheduleBgmBrush(context, bgm, startAt + offset + 0.02, 0.008);
       });
       if (bgm.bar % 2 === 1) scheduleBgmNote(context, bgm, chord[3] * 2, startAt + 2.3, 0.42, 0.018, "sine");
+      if (nightSkyRef.current) {
+        scheduleBgmNote(context, bgm, chord[0], startAt + 0.02, 2.9, 0.024, "sine", "night");
+        scheduleBgmNote(context, bgm, chord[2] * 2, startAt + 0.76, 0.74, 0.017, "sine", "night");
+        scheduleBgmNote(context, bgm, chord[1] * 2, startAt + 2.28, 0.64, 0.014, "sine", "night");
+      }
       bgm.nextBarAt = startAt + barSeconds;
       bgm.bar += 1;
     };
@@ -428,11 +483,26 @@ export default function Home() {
     bgm.timer = window.setInterval(scheduleBar, Math.round(barSeconds * 1000));
   }, [getAudioGraph, scheduleBgmBrush, scheduleBgmNote]);
 
+  const setNightSkyArrangement = useCallback((enabled: boolean) => {
+    if (nightSkyRef.current === enabled) return;
+    nightSkyRef.current = enabled;
+    setNightSky(enabled);
+    const context = audioRef.current;
+    const bgm = bgmRef.current;
+    if (context && bgm) {
+      const level = mutedRef.current || screenRef.current !== "playing" ? 0 : musicVolumeRef.current / 100;
+      bgm.dayGain.gain.setTargetAtTime(level * (enabled ? 0.018 : 0.048), context.currentTime, 1.25);
+      bgm.nightGain.gain.setTargetAtTime(level * (enabled ? 0.034 : 0), context.currentTime, 1.25);
+    }
+  }, []);
+
   const pauseBgm = useCallback(() => {
     const context = audioRef.current;
     const bgm = bgmRef.current;
     if (!context || !bgm) return;
-    bgm.gain.gain.setTargetAtTime(0, context.currentTime, 0.08);
+    bgm.dayGain.gain.setTargetAtTime(0, context.currentTime, 0.08);
+    bgm.nightGain.gain.setTargetAtTime(0, context.currentTime, 0.08);
+    setMusicPulse(0);
     if (bgm.timer !== null) window.clearInterval(bgm.timer);
     bgm.timer = null;
     bgm.nextBarAt = 0;
@@ -469,6 +539,7 @@ export default function Home() {
     bestRef.current = Math.max(bestRef.current, profileRef.current.best);
     runRecordBaselineRef.current = bestRef.current;
     newRecordSoundPlayedRef.current = false;
+    setNightSkyArrangement(false);
     world.player = { x: 500, y: 104, vx: 0, vy: 800, squash: 0, landing: 0, boostAvailable: true };
     world.platforms = [{ id: 0, x: 365, y: 50, width: 270, kind: "cloud", phase: 0, amplitude: 0 }];
     world.particles = [];
@@ -484,7 +555,7 @@ export default function Home() {
     setRecordFlash(false);
     setBoostReady(true);
     setRunReward(0);
-  }, [makePlatform]);
+  }, [makePlatform, setNightSkyArrangement]);
 
   const beginRun = useCallback(() => {
     resetWorld();
@@ -751,6 +822,7 @@ export default function Home() {
       });
       world.highestY = Math.max(world.highestY, player.y - 60);
       const heightScore = Math.max(0, Math.floor(world.highestY / 10));
+      setNightSkyArrangement(heightScore >= 700);
       const targetCamera = Math.max(0, player.y - viewHeight * 0.6);
       if (targetCamera > world.cameraY) world.cameraY += (targetCamera - world.cameraY) * (1 - Math.exp(-delta * 3.8));
 
@@ -774,6 +846,8 @@ export default function Home() {
       if (now - world.lastHudAt > 85) {
         world.lastHudAt = now;
         setHud({ current: heightScore, best: bestRef.current });
+        const beat = ((audioRef.current?.currentTime || 0) * 78 / 60) % 1;
+        setMusicPulse(mutedRef.current ? 0 : Math.pow(Math.max(0, 1 - beat * 2.8), 1.7));
       }
       if (player.y < world.cameraY - 175) {
         if (!world.runRewarded) {
@@ -1092,7 +1166,7 @@ export default function Home() {
     };
     frameRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(frameRef.current); observer.disconnect(); };
-  }, [makePlatform, pauseBgm, playNewRecordSound, playNoise, playTone]);
+  }, [makePlatform, pauseBgm, playNewRecordSound, playNoise, playTone, setNightSkyArrangement]);
 
   useEffect(() => () => {
     const bgm = bgmRef.current;
@@ -1116,6 +1190,12 @@ export default function Home() {
     profileRef.current = next;
     setProfile(next);
     playTone(celebrationIntensity === "vivid" ? 659.25 : 440, 0.1, "sine", 0.03, celebrationIntensity === "vivid" ? 880 : 523.25);
+  };
+
+  const setVolume = (channel: "music" | "sfx", values: number[]) => {
+    const next = clamp(Math.round(values[0] ?? 0), 0, 100);
+    if (channel === "music") setMusicVolume(next);
+    else setSfxVolume(next);
   };
 
   const showSettingsFromMenu = () => {
@@ -1153,6 +1233,7 @@ export default function Home() {
             <div className="score-pill"><span>ALTITUDE</span><strong>{hud.current.toLocaleString()}<small> m</small></strong></div>
             <div className="best-pill"><Trophy size={13} /><span>BEST {hud.best.toLocaleString()} m</span></div>
             {screen === "playing" && <div className={`boost-pill ${boostReady ? "" : "is-spent"}`}><Sparkles size={12} /><span>{boostReady ? "SPACE · BOOST READY" : "BOOST USED · LAND TO RECHARGE"}</span></div>}
+            {screen === "playing" && !muted && musicVolume > 0 && <div className={`hud-equalizer ${nightSky ? "is-night" : ""}`} role="img" aria-label={nightSky ? "Night-sky music is playing" : "Background music is playing"}>{[0.55, 0.82, 1, 0.72, 0.46].map((weight, index) => <span key={index} style={{ transform: `scaleY(${0.32 + musicPulse * weight})` }} />)}</div>}
           </div>
         )}
         <div className="hud-actions">
@@ -1216,6 +1297,14 @@ export default function Home() {
             <div className="setting-row">
               <div><strong>Soundscape</strong><span>{muted ? "Muted — visuals remain fully readable" : "Lo-fi guitar, sky texture, and effects are on"}</span></div>
               <Button className={`sound-toggle ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}{muted ? "Muted" : "Sound on"}</Button>
+            </div>
+            <div className="setting-row volume-setting">
+              <div><strong>Music volume</strong><span>{nightSky ? "Moonlit crossfade is active" : "Lo-fi guitar and sky ambience"}</span></div>
+              <div className="volume-control"><Slider value={[musicVolume]} min={0} max={100} step={1} onValueChange={(values) => setVolume("music", values)} aria-label="Music volume" /><output>{musicVolume}%</output></div>
+            </div>
+            <div className="setting-row volume-setting">
+              <div><strong>Effects volume</strong><span>Landings, boost, records, and interface cues</span></div>
+              <div className="volume-control"><Slider value={[sfxVolume]} min={0} max={100} step={1} onValueChange={(values) => setVolume("sfx", values)} aria-label="Sound effects volume" /><output>{sfxVolume}%</output></div>
             </div>
             <div className="setting-row celebration-setting">
               <div><strong>Record celebration</strong><span>{profile.celebrationIntensity === "vivid" ? "Full starlight and confetti burst" : "A smaller, quieter constellation"}</span></div>
