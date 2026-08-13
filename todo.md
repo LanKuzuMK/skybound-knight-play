@@ -50,4 +50,4 @@
 - [x] Validate, deploy, and checkpoint the adaptive audio experience.
 - [x] Rebalance canvas camera scaling for readable desktop and mobile gameplay.
 - [x] Increase top-right navigation hit targets and ensure Shop receives touch/pointer input.
-- [ ] Verify desktop and phone layouts, deploy the fixes, and save a checkpoint.
+- [x] Verify desktop and phone layouts, deploy the fixes, and save a checkpoint.
