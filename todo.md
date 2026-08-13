@@ -60,4 +60,5 @@
 - [x] Repair the missing Sky Lore visual source and frame it reliably.
 - [x] Verify responsive About-page rendering, deploy the repair, and save a checkpoint.
 - [x] Replace the invalid deployed castle source with a stable Sky Lore visual asset.
-- [ ] Reverify the live About-page image, deploy the corrected asset, and save a checkpoint.
+- [x] Add a built-in painted castle fallback so Sky Lore never renders as a blank panel.
+- [x] Reverify the live About-page image, deploy the corrected asset, and save a checkpoint.
