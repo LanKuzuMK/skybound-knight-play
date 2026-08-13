@@ -54,3 +54,6 @@
 - [x] Replace mobile left-right movement buttons with a virtual joystick.
 - [x] Place the virtual joystick on the left and the boost control on the right with safe-area spacing.
 - [x] Verify pointer tracking, boost coordination, responsive layout, deployment, and checkpointing.
+- [x] Reduce the mobile gameplay scale while preserving readable knight and platform sizes.
+- [x] Make equipped-style notices fade automatically and clear before they obstruct the HUD.
+- [x] Validate the phone layout, deploy the fix, and save a checkpoint.

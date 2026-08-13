@@ -226,6 +226,8 @@ export default function Home() {
   const [runReward, setRunReward] = useState(0);
   const [profileNameDraft, setProfileNameDraft] = useState(profile.name);
   const [armoryNotice, setArmoryNotice] = useState("");
+  const [armoryNoticeFading, setArmoryNoticeFading] = useState(false);
+  const [armoryNoticeKey, setArmoryNoticeKey] = useState(0);
   const [joystickOffset, setJoystickOffset] = useState({ x: 0, y: 0 });
   const [joystickActive, setJoystickActive] = useState(false);
 
@@ -268,6 +270,19 @@ export default function Home() {
     } catch { /* local browser storage is the intentional offline database */ }
     setHud((previous) => ({ ...previous, best: Math.max(previous.best, profile.best) }));
   }, [profile]);
+
+  useEffect(() => {
+    if (!armoryNotice) return undefined;
+    const fadeTimer = window.setTimeout(() => setArmoryNoticeFading(true), 2100);
+    const clearTimer = window.setTimeout(() => {
+      setArmoryNotice("");
+      setArmoryNoticeFading(false);
+    }, 2400);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [armoryNotice, armoryNoticeKey]);
 
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse)");
@@ -614,8 +629,15 @@ export default function Home() {
     modalRef.current = "shop";
     setModal("shop");
     setArmoryNotice("");
+    setArmoryNoticeFading(false);
     playTone(698.46, 0.1, "triangle", 0.03);
   }, [pauseRun, playTone]);
+
+  const showArmoryNotice = useCallback((message: string) => {
+    setArmoryNoticeFading(false);
+    setArmoryNotice(message);
+    setArmoryNoticeKey((current) => current + 1);
+  }, []);
 
   const saveProfileName = () => {
     const nextName = profileNameDraft.trim().slice(0, 18) || "Skyward Guest";
@@ -631,13 +653,13 @@ export default function Home() {
       const next = { ...current, selected: style.id };
       profileRef.current = next;
       setProfile(next);
-      setArmoryNotice(`${style.name} equipped.`);
+      showArmoryNotice(`${style.name} equipped.`);
       console.info("[Skybound Armory] Existing style equipped", { styleId: style.id });
       playTone(587.33, 0.09, "sine", 0.035, 783.99);
       return;
     }
     if (current.points < style.cost) {
-      setArmoryNotice(`Need ${style.cost - current.points} more height points for ${style.name}.`);
+      showArmoryNotice(`Need ${style.cost - current.points} more height points for ${style.name}.`);
       console.warn("[Skybound Armory] Purchase denied: insufficient height points", { styleId: style.id, balance: current.points, cost: style.cost });
       playTone(220, 0.14, "triangle", 0.032, 155);
       return;
@@ -645,7 +667,7 @@ export default function Home() {
     const next = { ...current, points: current.points - style.cost, unlocked: [...current.unlocked, style.id], selected: style.id };
     profileRef.current = next;
     setProfile(next);
-    setArmoryNotice(`${style.name} unlocked and equipped. ${next.points.toLocaleString()} height points remain.`);
+    showArmoryNotice(`${style.name} unlocked and equipped. ${next.points.toLocaleString()} height points remain.`);
     console.info("[Skybound Armory] Purchase complete", { styleId: style.id, cost: style.cost, balanceBefore: current.points, balanceAfter: next.points, equippedStyle: next.selected });
     playTone(659.25, 0.12, "sine", 0.05, 987.77);
     window.setTimeout(() => playTone(987.77, 0.18, "triangle", 0.04, 1318.51), 90);
@@ -722,8 +744,8 @@ export default function Home() {
     observer.observe(canvas);
     resize();
 
-    // Keep character and platform proportions consistent: cap wide-monitor growth, enlarge narrow screens, and center cropped phone views on the knight.
-    const worldScale = () => clamp(width / WORLD_WIDTH, 1.04, 1.16);
+    // Keep character and platform proportions consistent: cap wide-monitor growth, retain a readable phone scale, and center cropped phone views on the knight.
+    const worldScale = () => clamp(width / WORLD_WIDTH, 0.9, 1.16);
     const platformX = (platform: Platform, time: number) => platform.x + (platform.kind === "moving" ? Math.sin(time * 0.00115 + platform.phase) * platform.amplitude : 0);
 
     const puff = (world: World, x: number, y: number, count: number, hue = 42) => {
@@ -1262,7 +1284,7 @@ export default function Home() {
       <div className="sky-grain" aria-hidden="true" />
       <output className="inspectable-game-state" data-inspect-role="game-state" data-height={hud.current} data-best-height={hud.best} data-height-points={profile.points} data-unlocked-styles={profile.unlocked.length} aria-live="polite">{`${profile.name}: ${hud.current} metres, ${profile.points} height points, ${profile.unlocked.length} styles unlocked.`}</output>
 
-      {armoryNotice && <output className="armory-notice" role="status" aria-live="polite">{armoryNotice}</output>}
+      {armoryNotice && <output className={`armory-notice ${armoryNoticeFading ? "is-fading" : ""}`} role="status" aria-live="polite">{armoryNotice}</output>}
       <header className="game-hud" aria-label="Game status" data-ui-region="game-hud">
         <div className="brand-lockup">
           <div className="brand-mark brand-crest" role="img" aria-label="Skybound Knight compass crest"><span>✦</span></div>
