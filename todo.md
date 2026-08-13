@@ -67,3 +67,5 @@
 - [x] Verify the cleaned mobile and desktop composition, deploy it, and save a checkpoint.
 - [x] Remove the Sky Lore castle image from the gameplay canvas while keeping it in Sky Lore.
 - [x] Verify the clean mobile playfield, deploy the fix, and save a checkpoint.
+- [x] Audit Android APK readiness across safe areas, orientation, wake lock, haptics, back navigation, and asset preloading.
+- [x] Produce an implementation-ready launch checklist with prioritized mobile fixes.
