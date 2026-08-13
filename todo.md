@@ -66,4 +66,4 @@
 - [x] Reorganize the phone homepage to separate the hero, game window, controls, navigation, and progress summary.
 - [x] Verify the cleaned mobile and desktop composition, deploy it, and save a checkpoint.
 - [x] Remove the Sky Lore castle image from the gameplay canvas while keeping it in Sky Lore.
-- [ ] Verify the clean mobile playfield, deploy the fix, and save a checkpoint.
+- [x] Verify the clean mobile playfield, deploy the fix, and save a checkpoint.
