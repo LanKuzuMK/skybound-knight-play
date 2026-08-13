@@ -173,6 +173,9 @@ export default function Home() {
   const modalRef = useRef<Modal>("none");
   const mutedRef = useRef(false);
   const bestRef = useRef(0);
+  // The baseline is captured at run start; the boolean prevents frame-by-frame record replay.
+  const runRecordBaselineRef = useRef(0);
+  const newRecordSoundPlayedRef = useRef(false);
   const artRef = useRef<Record<string, HTMLImageElement>>({});
   const audioRef = useRef<AudioContext | null>(null);
   const audioGraphRef = useRef<AudioGraph | null>(null);
@@ -308,6 +311,18 @@ export default function Home() {
     source.start(now);
   }, [getAudioGraph]);
 
+  const playNewRecordSound = useCallback(() => {
+    // A single airy, ascending milestone cue: shimmer, then a restrained major arpeggio.
+    // Each voice has its own key and cooldown so the cue remains clean within the shared limiter.
+    playNoise(0.18, 0.014, 3600, "record-shimmer", 0.7);
+    playTone(392, 0.34, "sine", 0.038, 587.33, "record-root", 0.7);
+    window.setTimeout(() => {
+      playTone(493.88, 0.4, "sine", 0.036, 739.99, "record-third", 0.7);
+      playTone(659.25, 0.58, "triangle", 0.032, 1046.5, "record-bell", 0.7);
+    }, 82);
+    window.setTimeout(() => playTone(1046.5, 0.42, "sine", 0.018, 1318.51, "record-air", 0.7), 164);
+  }, [playNoise, playTone]);
+
   const startAmbient = useCallback(() => {
     const context = audioContext();
     if (!context) return;
@@ -368,6 +383,9 @@ export default function Home() {
 
   const resetWorld = useCallback(() => {
     const world = worldRef.current;
+    bestRef.current = Math.max(bestRef.current, profileRef.current.best);
+    runRecordBaselineRef.current = bestRef.current;
+    newRecordSoundPlayedRef.current = false;
     world.player = { x: 500, y: 104, vx: 0, vy: 800, squash: 0, landing: 0, boostAvailable: true };
     world.platforms = [{ id: 0, x: 365, y: 50, width: 270, kind: "cloud", phase: 0, amplitude: 0 }];
     world.particles = [];
@@ -626,17 +644,19 @@ export default function Home() {
       if (targetCamera > world.cameraY) world.cameraY += (targetCamera - world.cameraY) * (1 - Math.exp(-delta * 3.8));
 
       if (heightScore > bestRef.current) {
-        const firstRecord = bestRef.current > 0 && heightScore - bestRef.current < 4;
         bestRef.current = heightScore;
         try { window.localStorage.setItem("skybound-best", String(bestRef.current)); } catch { /* persistence remains optional */ }
-        if (firstRecord) {
-          setRecordFlash(true);
-          window.setTimeout(() => setRecordFlash(false), 1600);
-          puff(world, player.x, player.y, 22, 45);
-          playNoise(0.065, 0.018, 2500, "record-shimmer", 0.12);
-          playTone(523.25, 0.12, "sine", 0.05, 783.99);
-          window.setTimeout(() => playTone(783.99, 0.24, "triangle", 0.04, 1046.5), 110);
-        }
+      }
+
+      if (
+        !newRecordSoundPlayedRef.current
+        && heightScore > runRecordBaselineRef.current
+      ) {
+        newRecordSoundPlayedRef.current = true;
+        setRecordFlash(true);
+        window.setTimeout(() => setRecordFlash(false), 1600);
+        puff(world, player.x, player.y, 22, 45);
+        playNewRecordSound();
       }
 
       if (now - world.lastHudAt > 85) {
@@ -938,7 +958,7 @@ export default function Home() {
     };
     frameRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(frameRef.current); observer.disconnect(); };
-  }, [makePlatform, playNoise, playTone, silenceAmbient]);
+  }, [makePlatform, playNewRecordSound, playNoise, playTone, silenceAmbient]);
 
   useEffect(() => () => {
     if (melodyTimerRef.current) window.clearInterval(melodyTimerRef.current);

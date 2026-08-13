@@ -13,3 +13,26 @@
 - [x] Improve phone-first layouts, orientation handling, touch ergonomics, and accessible inspection metadata.
 - [x] Add Capacitor Android configuration and documented build scripts for producing an APK outside the web preview.
 - [x] Validate the responsive web build and Android packaging preparation, then save a checkpoint.
+- [x] Verify GitHub export access and identify the destination repository.
+- [x] Create the private skybound-knight-play repository and export the current source code.
+- [x] Verify the GitHub repository content and confirm the export result.
+- [x] Inspect the exported commit authors and resolve the user’s GitHub commit identity.
+- [x] Rewrite the imported commit attribution and verify the updated GitHub history.
+- [x] Verify Cloudflare Pages access and deployment prerequisites.
+- [x] Configure the Skybound Knight GitHub repository for Cloudflare Pages.
+- [x] Obtain user confirmation before the final external deployment action.
+- [x] Reconcile the package manifest and lockfile for Cloudflare’s frozen dependency install.
+- [x] Verify the production build, push the fix to GitHub, and confirm Cloudflare rebuilds successfully.
+- [x] Verify Cloudflare is building the corrected GitHub commit rather than the earlier failed revision.
+- [x] Trigger and confirm a successful rebuild from the corrected main branch.
+- [x] Audit the current armory unlock logic, audio engine, favicon, and mobile shop experience.
+- [x] Add UI selection/context-menu deterrents, reliable character purchase logic, and favicon coverage.
+- [x] Upgrade jump, landing, interface, and ambient audio with clean concurrency control.
+- [x] Polish the armory layout and visual feedback across phone screen sizes.
+- [x] Verify builds and behaviors, push the update to main, and confirm the Cloudflare Pages deployment.
+- [x] Create a favicon asset matching the Skybound Knight header crest.
+- [x] Wire the new favicon with cache-busting browser metadata and verify the build.
+- [x] Push the favicon update to main and confirm the Cloudflare Pages refresh.
+- [x] Audit and remove altitude-step audio that fires during normal climbing.
+- [x] Add a guarded one-time new-record milestone sound with a premium finish.
+- [ ] Verify the behavior, deploy the audio update, and save a checkpoint.
