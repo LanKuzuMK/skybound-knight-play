@@ -25,6 +25,7 @@ type Screen = "menu" | "playing" | "paused" | "gameover";
 type Modal = "none" | "settings" | "about" | "profile" | "shop";
 type PlatformKind = "cloud" | "moving" | "fading" | "spring";
 type EffectMode = "starlight" | "ember" | "mist" | "leaf" | "lunar" | "rose" | "aurora" | "storm" | "sunforge" | "void";
+type CelebrationIntensity = "subtle" | "vivid";
 
 type KnightStyle = {
   id: string;
@@ -36,7 +37,7 @@ type KnightStyle = {
   colors: { armor: string; visor: string; cape: string; crest: string; boots: string; trailHue: number; landingHue: number };
 };
 
-type LocalProfile = { name: string; points: number; best: number; unlocked: string[]; selected: string };
+type LocalProfile = { name: string; points: number; best: number; unlocked: string[]; selected: string; celebrationIntensity: CelebrationIntensity };
 type AudioGraph = { master: GainNode; compressor: DynamicsCompressorNode; active: Set<OscillatorNode | AudioBufferSourceNode>; lastByKey: Map<string, number> };
 
 type Platform = {
@@ -95,7 +96,7 @@ const KNIGHT_STYLES: KnightStyle[] = [
   { id: "voidglass-knight", name: "Voidglass Knight", epithet: "A mirror of the last sky", cost: 4600, effect: "void", colors: { armor: "#e7e4f2", visor: "#171831", cape: "#35315f", crest: "#cda9ff", boots: "#22213f", trailHue: 286, landingHue: 303 } },
 ];
 
-const DEFAULT_PROFILE: LocalProfile = { name: "Skyward Guest", points: 0, best: 0, unlocked: ["dawn-squire"], selected: "dawn-squire" };
+const DEFAULT_PROFILE: LocalProfile = { name: "Skyward Guest", points: 0, best: 0, unlocked: ["dawn-squire"], selected: "dawn-squire", celebrationIntensity: "vivid" };
 
 function getKnightStyle(id: string) {
   return KNIGHT_STYLES.find((style) => style.id === id) || KNIGHT_STYLES[0];
@@ -158,6 +159,7 @@ function loadProfile(): LocalProfile {
       best: Math.max(legacyBest, Number(parsed?.best) || 0),
       unlocked,
       selected,
+      celebrationIntensity: parsed?.celebrationIntensity === "subtle" ? "subtle" : "vivid",
     };
   } catch {
     return { ...DEFAULT_PROFILE, best: getStoredNumber("skybound-best") };
@@ -578,28 +580,29 @@ export default function Home() {
     };
 
     const recordBurst = (world: World, x: number, y: number) => {
-      const hues = [42, 50, 205, 219, 278];
-      const particleCount = 34;
+      const vivid = profileRef.current.celebrationIntensity === "vivid";
+      const hues = vivid ? [42, 50, 205, 219, 278] : [42, 205];
+      const particleCount = vivid ? 34 : 15;
       for (let index = 0; index < particleCount; index += 1) {
         const spread = randomBetween(-1.16, 1.16);
-        const speed = randomBetween(155, 330);
-        const isStar = index % 3 === 0;
-        const max = randomBetween(0.7, 1.28);
+        const speed = randomBetween(vivid ? 155 : 118, vivid ? 330 : 205);
+        const isStar = index % (vivid ? 3 : 4) === 0;
+        const max = randomBetween(vivid ? 0.7 : 0.58, vivid ? 1.28 : 0.92);
         world.particles.push({
           x: x + randomBetween(-12, 12),
           y: y + randomBetween(-8, 12),
           vx: Math.sin(spread) * speed,
-          vy: Math.cos(spread) * speed + randomBetween(42, 118),
+          vy: Math.cos(spread) * speed + randomBetween(vivid ? 42 : 28, vivid ? 118 : 70),
           life: max,
           max,
-          size: isStar ? randomBetween(4, 7) : randomBetween(3, 5.5),
+          size: isStar ? randomBetween(vivid ? 4 : 3.5, vivid ? 7 : 5) : randomBetween(vivid ? 3 : 2.5, vivid ? 5.5 : 4),
           hue: hues[index % hues.length],
           celebration: isStar ? "record-star" : "record-confetti",
           rotation: randomBetween(0, Math.PI * 2),
-          spin: randomBetween(-10, 10),
+          spin: randomBetween(vivid ? -10 : -6, vivid ? 10 : 6),
         });
       }
-      world.shake = Math.max(world.shake, 0.55);
+      world.shake = Math.max(world.shake, vivid ? 0.55 : 0.28);
       if (world.particles.length > 190) world.particles.splice(0, world.particles.length - 190);
     };
 
@@ -1025,6 +1028,14 @@ export default function Home() {
     if (!nextMuted) playTone(660, 0.08, "sine", 0.03);
   };
 
+  const setCelebrationIntensity = (celebrationIntensity: CelebrationIntensity) => {
+    if (profileRef.current.celebrationIntensity === celebrationIntensity) return;
+    const next = { ...profileRef.current, celebrationIntensity };
+    profileRef.current = next;
+    setProfile(next);
+    playTone(celebrationIntensity === "vivid" ? 659.25 : 440, 0.1, "sine", 0.03, celebrationIntensity === "vivid" ? 880 : 523.25);
+  };
+
   const showSettingsFromMenu = () => {
     modalRef.current = "settings";
     setModal("settings");
@@ -1054,6 +1065,9 @@ export default function Home() {
         </div>
         {screen !== "menu" && (
           <div className="score-stack" aria-live="polite">
+            {recordFlash && screen === "playing" && (
+              <div className="record-banner" role="status" aria-live="assertive"><Sparkles size={17} /><span>NEW RECORD</span><small>HORIZON SURPASSED</small><Sparkles size={17} /></div>
+            )}
             <div className="score-pill"><span>ALTITUDE</span><strong>{hud.current.toLocaleString()}<small> m</small></strong></div>
             <div className="best-pill"><Trophy size={13} /><span>BEST {hud.best.toLocaleString()} m</span></div>
             {screen === "playing" && <div className={`boost-pill ${boostReady ? "" : "is-spent"}`}><Sparkles size={12} /><span>{boostReady ? "SPACE · BOOST READY" : "BOOST USED · LAND TO RECHARGE"}</span></div>}
@@ -1066,10 +1080,6 @@ export default function Home() {
           <button className="round-control" onClick={screen === "menu" ? showSettingsFromMenu : openSettings} aria-label="Open settings"><Settings size={17} /></button>
         </div>
       </header>
-
-      {recordFlash && screen === "playing" && (
-        <div className="record-banner" role="status"><Sparkles size={17} /><span>NEW HEIGHT RECORD</span><Sparkles size={17} /></div>
-      )}
 
       {screen === "menu" && modal === "none" && (
         <section className="menu-stage" aria-label="Skybound Knight main menu">
@@ -1113,7 +1123,28 @@ export default function Home() {
       )}
 
       {modal === "settings" && (
-        <section className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div className="modal-card settings-card"><button className="modal-back" onClick={closeModal} aria-label="Close settings"><ChevronLeft size={19} /></button><div className="modal-mark brand-crest" aria-hidden="true"><span>✦</span></div><p className="eyebrow">EXPEDITION SETTINGS</p><h2 id="settings-title">Set your course</h2><p className="modal-intro">Your preferences stay with you, even after the clouds drift away.</p><div className="setting-row"><div><strong>Soundscape</strong><span>{muted ? "Muted — visuals remain fully readable" : "Dreamy sky audio is on"}</span></div><Button className={`sound-toggle ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}{muted ? "Muted" : "Sound on"}</Button></div>{screen !== "menu" && <div className="setting-row"><div><strong>Current run</strong><span>Paused safely at {hud.current.toLocaleString()} m</span></div><Button variant="outline" className="mini-action" onClick={beginRun}><RotateCcw size={15} /> Restart</Button></div>}<Button className="sky-button sky-button-primary full" onClick={screen === "paused" ? resumeRun : closeModal}>{screen === "paused" ? <><Play size={17} fill="currentColor" /> Resume ascent</> : "Back to menu"}</Button></div></section>
+        <section className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <div className="modal-card settings-card">
+            <button className="modal-back" onClick={closeModal} aria-label="Close settings"><ChevronLeft size={19} /></button>
+            <div className="modal-mark brand-crest" aria-hidden="true"><span>✦</span></div>
+            <p className="eyebrow">EXPEDITION SETTINGS</p>
+            <h2 id="settings-title">Set your course</h2>
+            <p className="modal-intro">Your preferences stay with you, even after the clouds drift away.</p>
+            <div className="setting-row">
+              <div><strong>Soundscape</strong><span>{muted ? "Muted — visuals remain fully readable" : "Dreamy sky audio is on"}</span></div>
+              <Button className={`sound-toggle ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}{muted ? "Muted" : "Sound on"}</Button>
+            </div>
+            <div className="setting-row celebration-setting">
+              <div><strong>Record celebration</strong><span>{profile.celebrationIntensity === "vivid" ? "Full starlight and confetti burst" : "A smaller, quieter constellation"}</span></div>
+              <div className="celebration-toggle" role="group" aria-label="Record celebration intensity">
+                <button className={profile.celebrationIntensity === "subtle" ? "is-active" : ""} onClick={() => setCelebrationIntensity("subtle")} aria-pressed={profile.celebrationIntensity === "subtle"}>Subtle</button>
+                <button className={profile.celebrationIntensity === "vivid" ? "is-active" : ""} onClick={() => setCelebrationIntensity("vivid")} aria-pressed={profile.celebrationIntensity === "vivid"}>Vivid</button>
+              </div>
+            </div>
+            {screen !== "menu" && <div className="setting-row"><div><strong>Current run</strong><span>Paused safely at {hud.current.toLocaleString()} m</span></div><Button variant="outline" className="mini-action" onClick={beginRun}><RotateCcw size={15} /> Restart</Button></div>}
+            <Button className="sky-button sky-button-primary full" onClick={screen === "paused" ? resumeRun : closeModal}>{screen === "paused" ? <><Play size={17} fill="currentColor" /> Resume ascent</> : "Back to menu"}</Button>
+          </div>
+        </section>
       )}
 
       {modal === "profile" && (

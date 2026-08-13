@@ -38,3 +38,6 @@
 - [x] Verify the behavior, deploy the audio update, and save a checkpoint.
 - [x] Design and add a one-time record-break particle burst.
 - [x] Validate, deploy, and checkpoint the record celebration update.
+- [x] Add a one-time New Record ribbon animation above the gameplay HUD.
+- [x] Add persistent subtle and vivid celebration-intensity choices in settings.
+- [ ] Verify the UI and preference behavior, deploy, and checkpoint the refinement.
