@@ -1103,16 +1103,6 @@ export default function Home() {
         context.fill();
       }
 
-      const castleWorldY = 3300;
-      const castleScreenY = height - (castleWorldY - world.cameraY) * scale;
-      const castle = artRef.current.castle;
-      if (castle?.complete && castle.naturalWidth && castleScreenY > -height * 0.8 && castleScreenY < height * 1.4) {
-        context.save();
-        context.globalAlpha = 0.48;
-        context.drawImage(castle, width * 0.28, castleScreenY - width * 0.36, width * 0.58, width * 0.38);
-        context.restore();
-      }
-
       context.save();
       const jitter = world.shake * 5;
       if (jitter) context.translate(Math.sin(now * 0.065) * jitter, Math.cos(now * 0.083) * jitter);
