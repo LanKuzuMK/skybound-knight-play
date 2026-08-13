@@ -718,6 +718,8 @@ export default function Home() {
     observer.observe(canvas);
     resize();
 
+    // Keep character and platform proportions consistent: cap wide-monitor growth, enlarge narrow screens, and center cropped phone views on the knight.
+    const worldScale = () => clamp(width / WORLD_WIDTH, 1.04, 1.16);
     const platformX = (platform: Platform, time: number) => platform.x + (platform.kind === "moving" ? Math.sin(time * 0.00115 + platform.phase) * platform.amplitude : 0);
 
     const puff = (world: World, x: number, y: number, count: number, hue = 42) => {
@@ -878,10 +880,10 @@ export default function Home() {
       context.restore();
     };
 
-    const drawPlatform = (platform: Platform, time: number, scale: number, cameraY: number) => {
+    const drawPlatform = (platform: Platform, time: number, scale: number, cameraY: number, offsetX: number) => {
       const x = platformX(platform, time);
       const y = height - (platform.y - cameraY) * scale;
-      const px = x * scale;
+      const px = offsetX + x * scale;
       const w = platform.width * scale;
       const faded = platform.fadingAt ? clamp(1 - (performance.now() - platform.fadingAt) / 720, 0, 1) : 1;
       if (y < -90 || y > height + 100 || faded <= 0) return;
@@ -928,8 +930,8 @@ export default function Home() {
       context.restore();
     };
 
-    const drawKnight = (player: World["player"], scale: number, cameraY: number) => {
-      const x = player.x * scale;
+    const drawKnight = (player: World["player"], scale: number, cameraY: number, offsetX: number) => {
+      const x = offsetX + player.x * scale;
       const y = height - (player.y - cameraY) * scale;
       const bounce = Math.sin(worldRef.current.t * 0.01) * 1.5 * scale;
       const squashX = 1 + player.squash * 0.18;
@@ -1032,8 +1034,11 @@ export default function Home() {
     const draw = (now: number) => {
       if (!width || !height) return;
       const world = worldRef.current;
-      const scale = width / WORLD_WIDTH;
+      const scale = worldScale();
       const viewHeight = height / scale;
+      const worldViewWidth = width / scale;
+      const focusX = worldViewWidth < WORLD_WIDTH ? world.player.x : WORLD_WIDTH / 2;
+      const offsetX = width / 2 - focusX * scale;
       context.clearRect(0, 0, width, height);
       const altitude = clamp(world.cameraY / 5200, 0, 1);
       const gradient = context.createLinearGradient(0, 0, 0, height);
@@ -1060,11 +1065,11 @@ export default function Home() {
       for (let index = -3; index < 12; index += 1) {
         const seed = index + band * 7;
         const cloudY = ((band * 700 + index * 218) - world.cameraY) * scale;
-        const x = ((seed * 173) % 1200 - 110) * scale;
+        const x = offsetX + ((seed * 173) % 1200 - 110) * scale;
         cloud(x, height - cloudY, (70 + ((seed * 41) % 80)) * scale, 0.08 + ((seed % 4) * 0.018), "#f8fbff");
       }
       for (let index = 0; index < 30; index += 1) {
-        const px = ((index * 137 + 91) % 1000) * scale;
+        const px = offsetX + ((index * 137 + 91) % 1000) * scale;
         const py = ((index * 191 + 57 - world.cameraY * 0.13) % (viewHeight + 180)) * scale - 70;
         context.fillStyle = index % 4 === 0 ? "rgba(236,183,83,.62)" : "rgba(255,255,255,.48)";
         context.beginPath();
@@ -1085,9 +1090,9 @@ export default function Home() {
       context.save();
       const jitter = world.shake * 5;
       if (jitter) context.translate(Math.sin(now * 0.065) * jitter, Math.cos(now * 0.083) * jitter);
-      for (const platform of world.platforms) drawPlatform(platform, world.t, scale, world.cameraY);
+      for (const platform of world.platforms) drawPlatform(platform, world.t, scale, world.cameraY, offsetX);
       for (const particle of world.particles) {
-        const x = particle.x * scale;
+        const x = offsetX + particle.x * scale;
         const y = height - (particle.y - world.cameraY) * scale;
         context.save();
         context.globalAlpha = particle.life / particle.max;
@@ -1145,7 +1150,7 @@ export default function Home() {
         }
         context.restore();
       }
-      drawKnight(world.player, scale, world.cameraY);
+      drawKnight(world.player, scale, world.cameraY, offsetX);
       context.restore();
 
       if (screenRef.current === "menu") {
@@ -1160,7 +1165,7 @@ export default function Home() {
     const loop = (now: number) => {
       const delta = Math.min(0.034, (now - previous) / 1000);
       previous = now;
-      if (screenRef.current === "playing" && modalRef.current === "none") update(delta, now, height / (width / WORLD_WIDTH));
+      if (screenRef.current === "playing" && modalRef.current === "none") update(delta, now, height / worldScale());
       draw(now);
       frameRef.current = requestAnimationFrame(loop);
     };
@@ -1238,7 +1243,7 @@ export default function Home() {
         )}
         <div className="hud-actions">
           {screen === "playing" && <button className="round-control" onClick={pauseRun} aria-label="Pause game"><Pause size={17} /></button>}
-          <button className="round-control" onClick={openShop} aria-label="Open style shop"><Store size={17} /></button>
+          <button className="round-control shop-control" onPointerDown={(event) => { if (event.pointerType !== "mouse") { event.preventDefault(); openShop(); } }} onClick={openShop} aria-label="Open style shop"><Store size={17} /></button>
           <button className="round-control" onClick={openProfile} aria-label="Open player profile"><UserRound size={17} /></button>
           <button className={`round-control audio-control ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-label={muted ? "Turn game audio on" : "Mute game audio"} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
           <button className="round-control" onClick={screen === "menu" ? showSettingsFromMenu : openSettings} aria-label="Open settings"><Settings size={17} /></button>
