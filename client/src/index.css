@@ -1,4 +1,5 @@
 /** Dawnveil Reverie: warm dawn cloudscapes, Dawnveil Blue, gilded compass details, and editorial serif contrast. */
+/* Dawnveil Reverie: calm parchment-and-sky hierarchy. On phones, the expedition window leads, then the title, actions, and progress are read as distinct stacked stages. */
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -143,6 +144,65 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .hud-equalizer { height: 17px; display: flex; align-items: end; justify-content: center; gap: 2px; padding: 3px 7px; color: #5177aa; background: rgba(246,252,255,.76); border: 1px solid rgba(92,138,191,.24); border-radius: 99px; box-shadow: 0 4px 12px rgba(48,86,139,.09); }.hud-equalizer span { width: 2px; height: 10px; background: currentColor; border-radius: 99px; transform-origin: bottom; transition: transform 120ms linear, background 360ms ease; }.hud-equalizer.is-night { color: #9b7bc6; background: rgba(246,242,255,.8); border-color: rgba(140,103,189,.28); }
 @media (max-width: 680px) { .volume-control { width: min(132px, 47%); gap: 7px; }.hud-equalizer { height: 15px; padding: 2px 6px; }.hud-equalizer span { height: 8px; } }
 .armory-notice { margin: -6px 0 16px; padding: 10px 13px; color: #73501b; background: linear-gradient(110deg, rgba(255,245,206,.95), rgba(252,237,176,.76)); border: 1px solid rgba(209,161,55,.36); border-radius: 13px; box-shadow: 0 6px 15px rgba(165,112,30,.08); font: 800 10px Manrope, sans-serif; letter-spacing: .015em; }.style-knight-preview.is-mage { border-radius: 13px 13px 7px 7px; box-shadow: 10px 7px 0 -7px rgba(65,51,101,.48); }.style-mage-hat { position: absolute; top: -18px; left: 2px; width: 28px; height: 26px; clip-path: polygon(50% 0, 100% 100%, 0 100%); filter: drop-shadow(0 1px 0 rgba(41,48,94,.5)); }.style-mage-hat::after { content: ""; position: absolute; left: -4px; right: -4px; bottom: 0; height: 5px; background: #f5dc86; border-radius: 999px; }.style-mage-staff { position: absolute; z-index: 3; right: -12px; top: 3px; width: 4px; height: 40px; border-radius: 999px; transform: rotate(-13deg); }.style-mage-staff::before { content: "✦"; position: absolute; top: -13px; left: -5px; color: #f5dc86; font-size: 13px; line-height: 1; }.style-knight-preview.is-mage i { top: 15px; left: 13px; }
+
+/* Mobile menu clarity: separate the illustrated route from the editorial controls instead of stacking them in the same visual field. */
+@media (max-width: 680px) and (orientation: portrait) {
+  .skybound-shell { overflow-y: auto; overscroll-behavior-y: contain; }
+  .game-canvas, .sky-grain { position: fixed; inset: 0; }
+  .game-hud { min-height: 102px; }
+  .menu-stage {
+    position: relative;
+    inset: auto;
+    min-height: 100dvh;
+    height: auto;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: calc(max(112px, env(safe-area-inset-top) + 100px)) 18px max(26px, env(safe-area-inset-bottom));
+  }
+  .menu-stage::before { left: -145px; bottom: 20%; opacity: .25; }
+  .menu-stage::after { right: -32px; top: 34%; opacity: .25; }
+  .expedition-window {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: min(100%, 342px);
+    min-width: 0;
+    height: clamp(244px, 58vw, 282px);
+    flex: 0 0 auto;
+    margin: 0 auto;
+    transform: rotate(1.25deg);
+  }
+  .journey-castle { transform: translateX(-50%) scale(.74); }
+  .sun-disc { transform: scale(.88); transform-origin: center; }
+  .route-platform { transform: scale(.88); transform-origin: center; }
+  .menu-copy {
+    width: min(100%, 382px);
+    margin: 0 auto;
+    padding: 0 2px;
+  }
+  .menu-copy .eyebrow { margin-bottom: 9px; }
+  .menu-title-mark { margin: -2px 0 6px; }
+  .menu-copy h1 { font-size: clamp(55px, 16.8vw, 76px); line-height: .78; }
+  .menu-tagline { margin: 14px 0 17px; font-size: 16px; }
+  .menu-actions { gap: 8px; }
+  .sky-button-primary { min-height: 52px; }
+  .menu-secondary-actions { gap: 8px; }
+  .menu-secondary-actions .sky-button { min-height: 42px; height: 42px; }
+  .menu-stats {
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 15px;
+    padding: 9px 8px;
+  }
+  .menu-best { margin-top: 0; }
+  .menu-wallet { margin-left: auto; }
+}
 @media (max-width: 540px) { .shop-layer { display: block; padding: 8px; overscroll-behavior: contain; }.shop-card { min-height: calc(100dvh - 16px); padding: 50px 12px max(22px, env(safe-area-inset-bottom)); border-radius: 22px; }.shop-heading { position: sticky; z-index: 4; top: -9px; gap: 12px; margin: -8px -4px 14px; padding: 12px 4px 13px; background: linear-gradient(180deg, rgba(255,253,247,.99) 74%, rgba(255,253,247,0)); }.shop-heading h2 { max-width: 310px; font-size: clamp(37px, 12vw, 50px); }.shop-heading p:not(.eyebrow) { margin-top: 8px; font-size: 11px; }.shop-wallet { min-height: 58px; border-radius: 15px; }.shop-grid { gap: 9px; }.style-card { min-height: 246px; padding: 9px; border-radius: 16px; }.style-card-top { min-height: 76px; }.style-card h3 { font-size: clamp(16px, 4.7vw, 19px); }.style-card p { min-height: 38px; font-size: 9px; }.style-card-copy small { min-height: 22px; font-size: 7px; }.style-action { min-height: 42px; margin-top: 7px; border-radius: 10px; font-size: 9px; }.armory-notice { margin: -2px 0 12px; font-size: 9px; line-height: 1.45; } }
 
 .skybound-shell > .armory-notice { position: fixed; z-index: 70; top: max(128px, calc(env(safe-area-inset-top) + 112px)); left: 50%; width: min(460px, calc(100vw - 32px)); margin: 0; transform: translateX(-50%); text-align: center; pointer-events: none; animation: armory-notice-in .22s cubic-bezier(.23,1,.32,1); }.skybound-shell > .armory-notice.is-fading { animation: armory-notice-out .3s cubic-bezier(.77,0,.175,1) forwards; }

@@ -62,3 +62,6 @@
 - [x] Replace the invalid deployed castle source with a stable Sky Lore visual asset.
 - [x] Add a built-in painted castle fallback so Sky Lore never renders as a blank panel.
 - [x] Reverify the live About-page image, deploy the corrected asset, and save a checkpoint.
+- [x] Restore the earlier Sky Lore castle artwork requested by the player.
+- [x] Reorganize the phone homepage to separate the hero, game window, controls, navigation, and progress summary.
+- [x] Verify the cleaned mobile and desktop composition, deploy it, and save a checkpoint.
