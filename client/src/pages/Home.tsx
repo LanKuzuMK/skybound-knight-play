@@ -20,7 +20,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 type Screen = "menu" | "playing" | "paused" | "gameover";
 type Modal = "none" | "settings" | "about" | "profile" | "shop";
@@ -195,6 +195,8 @@ export default function Home() {
   const runRecordBaselineRef = useRef(0);
   const newRecordSoundPlayedRef = useRef(false);
   const artRef = useRef<Record<string, HTMLImageElement>>({});
+  const joystickRef = useRef<HTMLDivElement>(null);
+  const joystickPointerRef = useRef<number | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const audioGraphRef = useRef<AudioGraph | null>(null);
   const bgmRef = useRef<BgmState | null>(null);
@@ -224,6 +226,8 @@ export default function Home() {
   const [runReward, setRunReward] = useState(0);
   const [profileNameDraft, setProfileNameDraft] = useState(profile.name);
   const [armoryNotice, setArmoryNotice] = useState("");
+  const [joystickOffset, setJoystickOffset] = useState({ x: 0, y: 0 });
+  const [joystickActive, setJoystickActive] = useState(false);
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -1215,8 +1219,42 @@ export default function Home() {
     playTone(659.25, 0.09, "sine", 0.03);
   };
 
-  const endTouch = (direction: "left" | "right") => { keysRef.current[direction] = false; };
-  const beginTouch = (direction: "left" | "right") => { keysRef.current[direction] = true; };
+  const resetJoystick = useCallback(() => {
+    joystickPointerRef.current = null;
+    keysRef.current.left = false;
+    keysRef.current.right = false;
+    setJoystickOffset({ x: 0, y: 0 });
+    setJoystickActive(false);
+  }, []);
+
+  const moveJoystick = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const joystick = joystickRef.current;
+    if (!joystick || joystickPointerRef.current !== event.pointerId) return;
+    const rect = joystick.getBoundingClientRect();
+    const radius = rect.width * 0.32;
+    const rawX = event.clientX - (rect.left + rect.width / 2);
+    const rawY = event.clientY - (rect.top + rect.height / 2);
+    const distance = Math.hypot(rawX, rawY);
+    const multiplier = distance > radius ? radius / distance : 1;
+    const x = rawX * multiplier;
+    const y = rawY * multiplier;
+    const deadZone = radius * 0.22;
+    keysRef.current.left = x < -deadZone;
+    keysRef.current.right = x > deadZone;
+    setJoystickOffset({ x, y });
+  }, []);
+
+  const beginJoystick = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    joystickPointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setJoystickActive(true);
+    moveJoystick(event);
+  }, [moveJoystick]);
+
+  useEffect(() => {
+    if (screen !== "playing" || modal !== "none") resetJoystick();
+  }, [modal, resetJoystick, screen]);
 
   return (
     <main className="skybound-shell" data-app="skybound-knight" data-screen={screen} data-player={profile.name} data-equipped-style={profile.selected} data-content-protection="basic-deterrent">
@@ -1338,9 +1376,12 @@ export default function Home() {
 
       {isTouch && screen === "playing" && modal === "none" && (
         <div className="touch-controls" aria-label="Touch movement controls">
-          <button className="touch-button" onPointerDown={() => beginTouch("left")} onPointerUp={() => endTouch("left")} onPointerCancel={() => endTouch("left")} onPointerLeave={() => endTouch("left")} aria-label="Move left">←</button>
-          <button className={`touch-button touch-boost ${boostReady ? "" : "is-spent"}`} onPointerDown={useBoost} aria-label={boostReady ? "Use aerial boost" : "Boost used; land to recharge"} disabled={!boostReady}>↟</button>
-          <button className="touch-button" onPointerDown={() => beginTouch("right")} onPointerUp={() => endTouch("right")} onPointerCancel={() => endTouch("right")} onPointerLeave={() => endTouch("right")} aria-label="Move right">→</button>
+          <div ref={joystickRef} className={`virtual-joystick ${joystickActive ? "is-active" : ""}`} role="group" aria-label="Movement joystick: drag left or right to steer" onPointerDown={beginJoystick} onPointerMove={moveJoystick} onPointerUp={resetJoystick} onPointerCancel={resetJoystick}>
+            <span className="joystick-thumb" aria-hidden="true" style={{ transform: `translate3d(${joystickOffset.x}px, ${joystickOffset.y}px, 0)` }} />
+            <span className="joystick-axis joystick-axis-x" aria-hidden="true" />
+            <span className="joystick-axis joystick-axis-y" aria-hidden="true" />
+          </div>
+          <button className={`touch-button touch-boost touch-boost-right ${boostReady ? "" : "is-spent"}`} onPointerDown={(event) => { event.preventDefault(); useBoost(); }} aria-label={boostReady ? "Use aerial boost" : "Boost used; land to recharge"} disabled={!boostReady}>↟</button>
         </div>
       )}
     </main>

@@ -51,3 +51,6 @@
 - [x] Rebalance canvas camera scaling for readable desktop and mobile gameplay.
 - [x] Increase top-right navigation hit targets and ensure Shop receives touch/pointer input.
 - [x] Verify desktop and phone layouts, deploy the fixes, and save a checkpoint.
+- [x] Replace mobile left-right movement buttons with a virtual joystick.
+- [x] Place the virtual joystick on the left and the boost control on the right with safe-area spacing.
+- [x] Verify pointer tracking, boost coordination, responsive layout, deployment, and checkpointing.
