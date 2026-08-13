@@ -9,3 +9,7 @@
 - [x] Add a player-name profile with persistent browser/phone storage for score, points, unlocks, and selected cosmetics.
 - [x] Build the shop tab and connect purchased selections to in-game knight, jump trail, and landing effects.
 - [x] Verify persistence and save an updated checkpoint.
+- [x] Audit small-screen layouts and expose inspectable web-app state and controls.
+- [x] Improve phone-first layouts, orientation handling, touch ergonomics, and accessible inspection metadata.
+- [x] Add Capacitor Android configuration and documented build scripts for producing an APK outside the web preview.
+- [x] Validate the responsive web build and Android packaging preparation, then save a checkpoint.

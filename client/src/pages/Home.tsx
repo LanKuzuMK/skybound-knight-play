@@ -837,11 +837,12 @@ export default function Home() {
   const beginTouch = (direction: "left" | "right") => { keysRef.current[direction] = true; };
 
   return (
-    <main className="skybound-shell">
-      <canvas ref={canvasRef} className="game-canvas" aria-label="Skybound Knight game world" />
+    <main className="skybound-shell" data-app="skybound-knight" data-screen={screen} data-player={profile.name} data-equipped-style={profile.selected}>
+      <canvas ref={canvasRef} className="game-canvas" aria-label="Skybound Knight game world" data-renderer="canvas" data-inspect-role="visual-game-layer" />
       <div className="sky-grain" aria-hidden="true" />
+      <output className="inspectable-game-state" data-inspect-role="game-state" data-height={hud.current} data-best-height={hud.best} data-height-points={profile.points} data-unlocked-styles={profile.unlocked.length} aria-live="polite">{`${profile.name}: ${hud.current} metres, ${profile.points} height points, ${profile.unlocked.length} styles unlocked.`}</output>
 
-      <header className="game-hud" aria-label="Game status">
+      <header className="game-hud" aria-label="Game status" data-ui-region="game-hud">
         <div className="brand-lockup">
           <div className="brand-mark brand-crest" role="img" aria-label="Skybound Knight compass crest"><span>✦</span></div>
           <div><span>SKYBOUND</span><strong>Knight</strong></div>
