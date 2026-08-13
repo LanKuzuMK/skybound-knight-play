@@ -4,10 +4,10 @@ Skybound Knight remains a normal, inspectable web application while also being p
 
 ## One-time Android setup
 
-Install Android Studio with the Android SDK and a compatible JDK. The project uses Capacitor Android 8. The Capacitor command-line package is declared as a development-only dependency; run the dependency installation once before using the commands below.
+Install Android Studio with the Android SDK and a compatible JDK. The project uses Capacitor Android 8. Install the Capacitor command-line package only in the local Android build environment; keeping it out of the web-hosting manifest avoids unnecessary static-site build dependencies.
 
 ```bash
-pnpm install
+pnpm add -D @capacitor/cli@8.5.0
 pnpm run android:prepare
 ```
 
