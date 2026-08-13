@@ -13,15 +13,29 @@ import {
   RotateCcw,
   Settings,
   Sparkles,
+  Store,
   Trophy,
+  UserRound,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Screen = "menu" | "playing" | "paused" | "gameover";
-type Modal = "none" | "settings" | "about";
+type Modal = "none" | "settings" | "about" | "profile" | "shop";
 type PlatformKind = "cloud" | "moving" | "fading" | "spring";
+type EffectMode = "starlight" | "ember" | "mist" | "leaf" | "lunar" | "rose" | "aurora" | "storm" | "sunforge" | "void";
+
+type KnightStyle = {
+  id: string;
+  name: string;
+  epithet: string;
+  cost: number;
+  effect: EffectMode;
+  colors: { armor: string; visor: string; cape: string; crest: string; boots: string; trailHue: number; landingHue: number };
+};
+
+type LocalProfile = { name: string; points: number; best: number; unlocked: string[]; selected: string };
 
 type Platform = {
   id: number;
@@ -35,7 +49,7 @@ type Platform = {
   fadingAt?: number;
 };
 
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; hue: number };
+type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; hue: number; mode?: EffectMode; aspect?: number };
 
 type World = {
   player: { x: number; y: number; vx: number; vy: number; squash: number; landing: number; boostAvailable: boolean };
@@ -45,8 +59,10 @@ type World = {
   highestY: number;
   nextPlatformId: number;
   lastHudAt: number;
+  lastTrailAt: number;
   t: number;
   shake: number;
+  runRewarded: boolean;
 };
 
 const ART = {
@@ -59,6 +75,26 @@ const ART = {
 const WORLD_WIDTH = 1000;
 const KNIGHT_W = 50;
 const KNIGHT_H = 64;
+const PROFILE_STORAGE_KEY = "skybound-profile-v2";
+
+const KNIGHT_STYLES: KnightStyle[] = [
+  { id: "dawn-squire", name: "Dawn Squire", epithet: "The first brave step", cost: 0, effect: "starlight", colors: { armor: "#eaf0f1", visor: "#234a7c", cape: "#3d67be", crest: "#f2c05b", boots: "#324f75", trailHue: 202, landingHue: 43 } },
+  { id: "ember-warden", name: "Ember Warden", epithet: "A warm spark in thin air", cost: 180, effect: "ember", colors: { armor: "#fff0d6", visor: "#7d3528", cape: "#c85139", crest: "#f3b54d", boots: "#71372f", trailHue: 20, landingHue: 34 } },
+  { id: "mist-ranger", name: "Mist Ranger", epithet: "Quiet as a cloud bank", cost: 360, effect: "mist", colors: { armor: "#e9f8f4", visor: "#246a75", cape: "#4fa7a4", crest: "#d6f0d6", boots: "#255860", trailHue: 181, landingHue: 164 } },
+  { id: "verdant-vow", name: "Verdant Vow", epithet: "Promise of the floating grove", cost: 620, effect: "leaf", colors: { armor: "#eaf1d4", visor: "#395c37", cape: "#688a49", crest: "#d4ba5c", boots: "#3d5f3c", trailHue: 97, landingHue: 77 } },
+  { id: "moon-archivist", name: "Moon Archivist", epithet: "Keeper of silver routes", cost: 950, effect: "lunar", colors: { armor: "#eeebf7", visor: "#55487f", cape: "#7868ae", crest: "#ebdbff", boots: "#4d4972", trailHue: 264, landingHue: 280 } },
+  { id: "rose-vanguard", name: "Rose Vanguard", epithet: "Courage in bloom", cost: 1350, effect: "rose", colors: { armor: "#fff0f0", visor: "#92435d", cape: "#d86e87", crest: "#f7c0a8", boots: "#793c58", trailHue: 345, landingHue: 12 } },
+  { id: "aurora-sentinel", name: "Aurora Sentinel", epithet: "Northlight above the storm", cost: 1850, effect: "aurora", colors: { armor: "#dff6f0", visor: "#207786", cape: "#32b6a4", crest: "#d7f279", boots: "#1f6173", trailHue: 157, landingHue: 188 } },
+  { id: "storm-herald", name: "Storm Herald", epithet: "Rider of high pressure", cost: 2500, effect: "storm", colors: { armor: "#e0e8ff", visor: "#334b91", cape: "#496cca", crest: "#99c9ff", boots: "#2d407f", trailHue: 219, landingHue: 233 } },
+  { id: "sunforge-paladin", name: "Sunforge Paladin", epithet: "Tempered at the horizon", cost: 3400, effect: "sunforge", colors: { armor: "#fff1cb", visor: "#8a571a", cape: "#d68e28", crest: "#fff0a4", boots: "#75491e", trailHue: 45, landingHue: 50 } },
+  { id: "voidglass-knight", name: "Voidglass Knight", epithet: "A mirror of the last sky", cost: 4600, effect: "void", colors: { armor: "#e7e4f2", visor: "#171831", cape: "#35315f", crest: "#cda9ff", boots: "#22213f", trailHue: 286, landingHue: 303 } },
+];
+
+const DEFAULT_PROFILE: LocalProfile = { name: "Skyward Guest", points: 0, best: 0, unlocked: ["dawn-squire"], selected: "dawn-squire" };
+
+function getKnightStyle(id: string) {
+  return KNIGHT_STYLES.find((style) => style.id === id) || KNIGHT_STYLES[0];
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -68,11 +104,55 @@ function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
+function emitStyleParticles(world: World, style: KnightStyle, x: number, y: number, kind: "trail" | "landing", count = 4) {
+  const multiplier = style.effect === "aurora" || style.effect === "sunforge" ? 1.5 : style.effect === "void" ? 0.75 : 1;
+  const total = Math.ceil(count * multiplier);
+  for (let index = 0; index < total; index += 1) {
+    const max = randomBetween(kind === "trail" ? 0.19 : 0.34, kind === "trail" ? 0.42 : 0.76);
+    const side = index % 2 ? -1 : 1;
+    const hueShift = style.effect === "aurora" ? index * 26 : style.effect === "rose" ? index * 7 : 0;
+    world.particles.push({
+      x: x + randomBetween(-5, 5),
+      y: y + randomBetween(-4, 4),
+      vx: randomBetween(22, 120) * side,
+      vy: kind === "trail" ? randomBetween(-145, -34) : randomBetween(38, 175),
+      life: max,
+      max,
+      size: randomBetween(style.effect === "void" ? 2 : 3, style.effect === "sunforge" ? 8 : 6),
+      hue: (kind === "trail" ? style.colors.trailHue : style.colors.landingHue) + hueShift,
+      mode: style.effect,
+      aspect: style.effect === "leaf" || style.effect === "ember" ? randomBetween(1.35, 2.4) : 1,
+    });
+  }
+  if (world.particles.length > 150) world.particles.splice(0, world.particles.length - 150);
+}
+
 function getStoredNumber(key: string) {
   try {
     return Number(window.localStorage.getItem(key) || "0") || 0;
   } catch {
     return 0;
+  }
+}
+
+function loadProfile(): LocalProfile {
+  try {
+    const saved = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    const parsed = saved ? JSON.parse(saved) as Partial<LocalProfile> : null;
+    const legacyBest = getStoredNumber("skybound-best");
+    const unlocked = Array.isArray(parsed?.unlocked) && parsed!.unlocked.includes("dawn-squire")
+      ? parsed!.unlocked.filter((id) => KNIGHT_STYLES.some((style) => style.id === id))
+      : DEFAULT_PROFILE.unlocked;
+    const selected = unlocked.includes(parsed?.selected || "") ? parsed!.selected! : "dawn-squire";
+    return {
+      name: typeof parsed?.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 18) : DEFAULT_PROFILE.name,
+      points: Math.max(0, Number(parsed?.points) || 0),
+      best: Math.max(legacyBest, Number(parsed?.best) || 0),
+      unlocked,
+      selected,
+    };
+  } catch {
+    return { ...DEFAULT_PROFILE, best: getStoredNumber("skybound-best") };
   }
 }
 
@@ -94,18 +174,22 @@ export default function Home() {
   const melodyTimerRef = useRef<number | null>(null);
   const worldRef = useRef<World>({
     player: { x: 500, y: 95, vx: 0, vy: 0, squash: 0, landing: 0, boostAvailable: true },
-    platforms: [], particles: [], cameraY: 0, highestY: 0, nextPlatformId: 1, lastHudAt: 0, t: 0, shake: 0,
+    platforms: [], particles: [], cameraY: 0, highestY: 0, nextPlatformId: 1, lastHudAt: 0, lastTrailAt: 0, t: 0, shake: 0, runRewarded: false,
   });
 
   const [screen, setScreen] = useState<Screen>("menu");
   const [modal, setModal] = useState<Modal>("none");
+  const [profile, setProfile] = useState<LocalProfile>(() => loadProfile());
+  const profileRef = useRef<LocalProfile>(profile);
   const [muted, setMuted] = useState(() => {
     try { return window.localStorage.getItem("skybound-muted") === "true"; } catch { return false; }
   });
   const [isTouch, setIsTouch] = useState(isTouchFirst);
-  const [hud, setHud] = useState({ current: 0, best: getStoredNumber("skybound-best") });
+  const [hud, setHud] = useState({ current: 0, best: profile.best });
   const [recordFlash, setRecordFlash] = useState(false);
   const [boostReady, setBoostReady] = useState(true);
+  const [runReward, setRunReward] = useState(0);
+  const [profileNameDraft, setProfileNameDraft] = useState(profile.name);
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -116,9 +200,14 @@ export default function Home() {
   }, [muted]);
 
   useEffect(() => {
-    bestRef.current = getStoredNumber("skybound-best");
-    setHud((previous) => ({ ...previous, best: bestRef.current }));
-  }, []);
+    profileRef.current = profile;
+    bestRef.current = Math.max(bestRef.current, profile.best);
+    try {
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+      window.localStorage.setItem("skybound-best", String(profile.best));
+    } catch { /* local browser storage is the intentional offline database */ }
+    setHud((previous) => ({ ...previous, best: Math.max(previous.best, profile.best) }));
+  }, [profile]);
 
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse)");
@@ -228,12 +317,15 @@ export default function Home() {
     world.cameraY = 0;
     world.highestY = 104;
     world.nextPlatformId = 1;
+    world.lastTrailAt = 0;
     world.t = 0;
     world.shake = 0;
+    world.runRewarded = false;
     while (world.platforms[world.platforms.length - 1].y < 1900) makePlatform(world);
     setHud({ current: 0, best: bestRef.current });
     setRecordFlash(false);
     setBoostReady(true);
+    setRunReward(0);
   }, [makePlatform]);
 
   const beginRun = useCallback(() => {
@@ -276,6 +368,44 @@ export default function Home() {
     playTone(523.25, 0.07, "sine", 0.025);
   }, [playTone]);
 
+  const openProfile = useCallback(() => {
+    if (screenRef.current === "playing") pauseRun();
+    setProfileNameDraft(profileRef.current.name);
+    modalRef.current = "profile";
+    setModal("profile");
+    playTone(523.25, 0.08, "sine", 0.03);
+  }, [pauseRun, playTone]);
+
+  const openShop = useCallback(() => {
+    if (screenRef.current === "playing") pauseRun();
+    modalRef.current = "shop";
+    setModal("shop");
+    playTone(698.46, 0.1, "triangle", 0.03);
+  }, [pauseRun, playTone]);
+
+  const saveProfileName = () => {
+    const nextName = profileNameDraft.trim().slice(0, 18) || "Skyward Guest";
+    setProfile((current) => ({ ...current, name: nextName }));
+    setProfileNameDraft(nextName);
+    playTone(659.25, 0.1, "sine", 0.035, 880);
+  };
+
+  const purchaseOrEquip = (style: KnightStyle) => {
+    const current = profileRef.current;
+    if (current.unlocked.includes(style.id)) {
+      setProfile((previous) => ({ ...previous, selected: style.id }));
+      playTone(587.33, 0.09, "sine", 0.035, 783.99);
+      return;
+    }
+    if (current.points < style.cost) {
+      playTone(220, 0.14, "triangle", 0.032, 155);
+      return;
+    }
+    setProfile((previous) => ({ ...previous, points: previous.points - style.cost, unlocked: [...previous.unlocked, style.id], selected: style.id }));
+    playTone(659.25, 0.12, "sine", 0.05, 987.77);
+    window.setTimeout(() => playTone(987.77, 0.18, "triangle", 0.04, 1318.51), 90);
+  };
+
   const useBoost = useCallback(() => {
     const world = worldRef.current;
     const player = world.player;
@@ -285,10 +415,7 @@ export default function Home() {
     player.squash = 0.52;
     world.shake = Math.max(world.shake, 0.42);
     setBoostReady(false);
-    for (let index = 0; index < 12; index += 1) {
-      const life = randomBetween(0.24, 0.52);
-      world.particles.push({ x: player.x, y: player.y - 16, vx: randomBetween(-92, 92), vy: randomBetween(-220, -65), life, max: life, size: randomBetween(2.4, 5.5), hue: index % 2 ? 47 : 202 });
-    }
+    emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, player.y - 16, "trail", 10);
     if (navigator.vibrate) navigator.vibrate(12);
     playTone(620, 0.11, "triangle", 0.05, 980);
     window.setTimeout(() => playTone(980, 0.12, "sine", 0.026, 1240), 68);
@@ -364,6 +491,10 @@ export default function Home() {
       player.squash = Math.max(0, player.squash - delta * 4.8);
       player.landing = Math.max(0, player.landing - delta * 3.4);
       world.shake = Math.max(0, world.shake - delta * 2.5);
+      if (player.vy > 80 && world.t - world.lastTrailAt > 62) {
+        world.lastTrailAt = world.t;
+        emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, player.y - 18, "trail", 2);
+      }
 
       if (player.vy <= 0) {
         const previousBottom = oldY - KNIGHT_H / 2;
@@ -383,6 +514,7 @@ export default function Home() {
             world.shake = platform.kind === "spring" ? 0.75 : 0.32;
             if (platform.kind === "fading" && !platform.fadingAt) platform.fadingAt = now;
             puff(world, player.x, platform.y + 4, platform.kind === "spring" ? 16 : 10, platform.kind === "spring" ? 47 : 37);
+            emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, platform.y + 5, "landing", platform.kind === "spring" ? 15 : 9);
             playTone(platform.kind === "spring" ? 660 : 440, platform.kind === "spring" ? 0.22 : 0.1, platform.kind === "spring" ? "triangle" : "sine", 0.035, platform.kind === "spring" ? 990 : 530);
             break;
           }
@@ -424,6 +556,12 @@ export default function Home() {
         setHud({ current: heightScore, best: bestRef.current });
       }
       if (player.y < world.cameraY - 175) {
+        if (!world.runRewarded) {
+          const earned = Math.max(1, Math.floor(heightScore / 8));
+          world.runRewarded = true;
+          setRunReward(earned);
+          setProfile((current) => ({ ...current, points: current.points + earned, best: Math.max(current.best, heightScore) }));
+        }
         screenRef.current = "gameover";
         setScreen("gameover");
         silenceAmbient();
@@ -506,20 +644,21 @@ export default function Home() {
       context.scale(squashX, squashY);
       context.shadowColor = "rgba(30,65,124,.32)";
       context.shadowBlur = 14 * scale;
+      const style = getKnightStyle(profileRef.current.selected);
       // A self-drawn knight keeps the player crisp and guarantees no sprite backdrop enters the game world.
-      context.fillStyle = "#3a5f96";
+      context.fillStyle = style.colors.visor;
       context.beginPath();
       context.ellipse(15 * scale, 12 * scale, 10 * scale, 18 * scale, -0.38, 0, Math.PI * 2);
       context.fill();
-      context.fillStyle = "#3d67be";
+      context.fillStyle = style.colors.cape;
       context.beginPath();
       context.moveTo(10 * scale, -1 * scale);
       context.quadraticCurveTo(34 * scale, 8 * scale, 28 * scale, 30 * scale);
       context.lineTo(6 * scale, 20 * scale);
       context.closePath();
       context.fill();
-      context.fillStyle = "#f6f7f1";
-      context.strokeStyle = "#315d95";
+      context.fillStyle = style.colors.armor;
+      context.strokeStyle = style.colors.visor;
       context.lineWidth = 2 * scale;
       context.beginPath();
       context.moveTo(-12 * scale, 2 * scale);
@@ -529,7 +668,7 @@ export default function Home() {
       context.closePath();
       context.fill();
       context.stroke();
-      context.fillStyle = "#eaf0f1";
+      context.fillStyle = style.colors.armor;
       context.beginPath();
       context.arc(0, -10 * scale, 17 * scale, Math.PI, 0);
       context.lineTo(17 * scale, 1 * scale);
@@ -537,11 +676,11 @@ export default function Home() {
       context.closePath();
       context.fill();
       context.stroke();
-      context.fillStyle = "#234a7c";
+      context.fillStyle = style.colors.visor;
       context.beginPath();
       context.roundRect(-12 * scale, -8 * scale, 24 * scale, 7 * scale, 3 * scale);
       context.fill();
-      context.fillStyle = "#f2c05b";
+      context.fillStyle = style.colors.crest;
       context.beginPath();
       context.moveTo(0, 7 * scale);
       context.lineTo(5 * scale, 13 * scale);
@@ -549,7 +688,7 @@ export default function Home() {
       context.lineTo(-5 * scale, 13 * scale);
       context.closePath();
       context.fill();
-      context.fillStyle = "#324f75";
+      context.fillStyle = style.colors.boots;
       context.fillRect(-14 * scale, 23 * scale, 10 * scale, 4 * scale);
       context.fillRect(5 * scale, 23 * scale, 10 * scale, 4 * scale);
       context.restore();
@@ -618,9 +757,35 @@ export default function Home() {
         context.save();
         context.globalAlpha = particle.life / particle.max;
         context.fillStyle = `hsl(${particle.hue} 88% 76%)`;
-        context.beginPath();
-        context.arc(x, y, particle.size * scale, 0, Math.PI * 2);
-        context.fill();
+        context.translate(x, y);
+        if (particle.mode === "leaf" || particle.mode === "ember") {
+          context.rotate((particle.vx + particle.vy) * 0.008);
+          context.beginPath();
+          context.ellipse(0, 0, particle.size * scale * (particle.aspect || 1), particle.size * scale * 0.68, 0, 0, Math.PI * 2);
+          context.fill();
+        } else if (particle.mode === "starlight" || particle.mode === "sunforge") {
+          const radius = particle.size * scale;
+          context.beginPath();
+          context.moveTo(0, -radius);
+          context.lineTo(radius * .58, 0);
+          context.lineTo(0, radius);
+          context.lineTo(-radius * .58, 0);
+          context.closePath();
+          context.fill();
+        } else if (particle.mode === "void") {
+          context.globalCompositeOperation = "screen";
+          context.beginPath();
+          context.arc(0, 0, particle.size * scale * 1.35, 0, Math.PI * 2);
+          context.fill();
+          context.fillStyle = "rgba(255,255,255,.72)";
+          context.beginPath();
+          context.arc(0, 0, particle.size * scale * .35, 0, Math.PI * 2);
+          context.fill();
+        } else {
+          context.beginPath();
+          context.arc(0, 0, particle.size * scale, 0, Math.PI * 2);
+          context.fill();
+        }
         context.restore();
       }
       drawKnight(world.player, scale, world.cameraY);
@@ -690,6 +855,8 @@ export default function Home() {
         )}
         <div className="hud-actions">
           {screen === "playing" && <button className="round-control" onClick={pauseRun} aria-label="Pause game"><Pause size={17} /></button>}
+          <button className="round-control" onClick={openShop} aria-label="Open style shop"><Store size={17} /></button>
+          <button className="round-control" onClick={openProfile} aria-label="Open player profile"><UserRound size={17} /></button>
           <button className="round-control" onClick={screen === "menu" ? showSettingsFromMenu : openSettings} aria-label="Open settings"><Settings size={17} /></button>
         </div>
       </header>
@@ -721,9 +888,11 @@ export default function Home() {
               <div className="menu-secondary-actions">
                 <Button variant="outline" className="sky-button sky-button-quiet" onClick={showSettingsFromMenu}><Settings size={16} /> Settings</Button>
                 <Button variant="outline" className="sky-button sky-button-quiet" onClick={openAbout}><Info size={16} /> About</Button>
+                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openShop}><Store size={16} /> Style shop</Button>
+                <Button variant="outline" className="sky-button sky-button-quiet" onClick={openProfile}><UserRound size={16} /> {profile.name}</Button>
               </div>
             </div>
-            <div className="menu-best"><Trophy size={15} /><span>Highest horizon</span><strong>{hud.best.toLocaleString()} m</strong></div>
+            <div className="menu-stats"><div className="menu-best"><Trophy size={15} /><span>Highest horizon</span><strong>{hud.best.toLocaleString()} m</strong></div><div className="menu-wallet"><Sparkles size={14} /><span>Height points</span><strong>{profile.points.toLocaleString()}</strong></div></div>
           </div>
           {!isTouch && <div className="key-hint"><Keyboard size={15} /><span><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> steer · <kbd>Space</kbd> boost</span></div>}
         </section>
@@ -734,11 +903,19 @@ export default function Home() {
       )}
 
       {screen === "gameover" && modal === "none" && (
-        <section className="state-overlay"><div className="state-card"><p className="eyebrow"><Cloud size={15} /> THE CLOUDS WILL CATCH YOU</p><h2>Journey complete</h2><div className="result-height"><span>YOUR ALTITUDE</span><strong>{hud.current.toLocaleString()}<small> m</small></strong><p>Highest horizon: <b>{hud.best.toLocaleString()} m</b></p></div><Button className="sky-button sky-button-primary" onClick={beginRun}><RotateCcw size={17} /> Ascend again</Button><Button variant="outline" className="sky-button sky-button-quiet full" onClick={() => { screenRef.current = "menu"; setScreen("menu"); }}><ChevronLeft size={16} /> Main menu</Button></div></section>
+        <section className="state-overlay"><div className="state-card"><p className="eyebrow"><Cloud size={15} /> THE CLOUDS WILL CATCH YOU</p><h2>Journey complete</h2><div className="result-height"><span>YOUR ALTITUDE</span><strong>{hud.current.toLocaleString()}<small> m</small></strong><p>Highest horizon: <b>{hud.best.toLocaleString()} m</b></p><div className="reward-stamp"><Sparkles size={14} /> +{runReward.toLocaleString()} height points</div></div><Button className="sky-button sky-button-primary" onClick={beginRun}><RotateCcw size={17} /> Ascend again</Button><Button variant="outline" className="sky-button sky-button-quiet full" onClick={openShop}><Store size={16} /> Visit style shop</Button><Button variant="outline" className="sky-button sky-button-quiet full" onClick={() => { screenRef.current = "menu"; setScreen("menu"); }}><ChevronLeft size={16} /> Main menu</Button></div></section>
       )}
 
       {modal === "settings" && (
         <section className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div className="modal-card settings-card"><button className="modal-back" onClick={closeModal} aria-label="Close settings"><ChevronLeft size={19} /></button><div className="modal-mark brand-crest" aria-hidden="true"><span>✦</span></div><p className="eyebrow">EXPEDITION SETTINGS</p><h2 id="settings-title">Set your course</h2><p className="modal-intro">Your preferences stay with you, even after the clouds drift away.</p><div className="setting-row"><div><strong>Soundscape</strong><span>{muted ? "Muted — visuals remain fully readable" : "Dreamy sky audio is on"}</span></div><Button className={`sound-toggle ${muted ? "is-muted" : ""}`} onClick={toggleMute} aria-pressed={!muted}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}{muted ? "Muted" : "Sound on"}</Button></div>{screen !== "menu" && <div className="setting-row"><div><strong>Current run</strong><span>Paused safely at {hud.current.toLocaleString()} m</span></div><Button variant="outline" className="mini-action" onClick={beginRun}><RotateCcw size={15} /> Restart</Button></div>}<Button className="sky-button sky-button-primary full" onClick={screen === "paused" ? resumeRun : closeModal}>{screen === "paused" ? <><Play size={17} fill="currentColor" /> Resume ascent</> : "Back to menu"}</Button></div></section>
+      )}
+
+      {modal === "profile" && (
+        <section className="modal-layer" role="dialog" aria-modal="true" aria-labelledby="profile-title"><div className="modal-card profile-card"><button className="modal-back" onClick={closeModal} aria-label="Close profile"><ChevronLeft size={19} /></button><div className="profile-crest"><UserRound size={28} /></div><p className="eyebrow">SKYWARD PASSPORT</p><h2 id="profile-title">Your expedition</h2><p className="modal-intro">Your name, height points, unlocked styles, and highest horizon are saved privately in this browser or phone.</p><label className="profile-name-label" htmlFor="skybound-player-name">CALLSIGN</label><div className="profile-name-row"><input id="skybound-player-name" className="profile-name-input" value={profileNameDraft} onChange={(event) => setProfileNameDraft(event.target.value)} maxLength={18} placeholder="Enter a name" /><Button className="mini-action profile-save" onClick={saveProfileName}>Save</Button></div><div className="profile-stat-grid"><div><span>HEIGHT POINTS</span><strong>{profile.points.toLocaleString()}</strong><small>Earned from completed climbs</small></div><div><span>BEST HORIZON</span><strong>{profile.best.toLocaleString()} m</strong><small>Personal ascent record</small></div><div><span>STYLE VAULT</span><strong>{profile.unlocked.length} / {KNIGHT_STYLES.length}</strong><small>Knights in your collection</small></div></div><Button className="sky-button sky-button-primary full" onClick={openShop}><Store size={17} /> Open style shop</Button></div></section>
+      )}
+
+      {modal === "shop" && (
+        <section className="modal-layer shop-layer" role="dialog" aria-modal="true" aria-labelledby="shop-title"><div className="shop-card"><button className="modal-back" onClick={closeModal} aria-label="Close style shop"><ChevronLeft size={19} /></button><div className="shop-heading"><div><p className="eyebrow"><Store size={15} /> THE SKYWARD ARMORY</p><h2 id="shop-title">Choose your legend.</h2><p>Each knight carries a distinct silhouette, jump trace, and landing bloom.</p></div><div className="shop-wallet"><Sparkles size={17} /><span>HEIGHT POINTS</span><strong>{profile.points.toLocaleString()}</strong></div></div><div className="shop-grid">{KNIGHT_STYLES.map((style) => { const owned = profile.unlocked.includes(style.id); const equipped = profile.selected === style.id; const available = owned || profile.points >= style.cost; return <article key={style.id} className={`style-card ${equipped ? "is-equipped" : ""} ${owned ? "is-owned" : "is-locked"}`}><div className="style-card-top"><div className="style-knight-preview" style={{ background: `linear-gradient(145deg, ${style.colors.armor}, ${style.colors.cape})` }}><span className="style-helmet" style={{ borderColor: style.colors.visor, background: style.colors.armor }} /><span className="style-cape" style={{ background: style.colors.cape }} /><i style={{ background: style.colors.crest }} /></div><div className="style-effect-dots"><span style={{ background: `hsl(${style.colors.trailHue} 78% 67%)` }} /><span style={{ background: `hsl(${style.colors.landingHue} 85% 72%)` }} /><span style={{ background: style.colors.crest }} /></div></div><div className="style-card-copy"><span className="style-index">{String(KNIGHT_STYLES.indexOf(style) + 1).padStart(2, "0")}</span><h3>{style.name}</h3><p>{style.epithet}</p><small>{style.effect} trail · landing bloom</small></div><Button className={`style-action ${equipped ? "is-equipped" : ""}`} onClick={() => purchaseOrEquip(style)} disabled={!available || equipped}>{equipped ? "Equipped" : owned ? "Equip" : available ? <><Sparkles size={13} /> Unlock · {style.cost}</> : <><Sparkles size={13} /> Need {style.cost - profile.points}</>}</Button></article>; })}</div><p className="shop-footnote">Height points are earned at the end of each run and stored locally on this device. Unlocks never leave this browser unless its storage is cleared.</p></div></section>
       )}
 
       {modal === "about" && (
