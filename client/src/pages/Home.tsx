@@ -51,7 +51,10 @@ type Platform = {
   fadingAt?: number;
 };
 
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; hue: number; mode?: EffectMode; aspect?: number };
+type Particle = {
+  x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; hue: number;
+  mode?: EffectMode; aspect?: number; celebration?: "record-star" | "record-confetti"; rotation?: number; spin?: number;
+};
 
 type World = {
   player: { x: number; y: number; vx: number; vy: number; squash: number; landing: number; boostAvailable: boolean };
@@ -574,6 +577,32 @@ export default function Home() {
       if (world.particles.length > 100) world.particles.splice(0, world.particles.length - 100);
     };
 
+    const recordBurst = (world: World, x: number, y: number) => {
+      const hues = [42, 50, 205, 219, 278];
+      const particleCount = 34;
+      for (let index = 0; index < particleCount; index += 1) {
+        const spread = randomBetween(-1.16, 1.16);
+        const speed = randomBetween(155, 330);
+        const isStar = index % 3 === 0;
+        const max = randomBetween(0.7, 1.28);
+        world.particles.push({
+          x: x + randomBetween(-12, 12),
+          y: y + randomBetween(-8, 12),
+          vx: Math.sin(spread) * speed,
+          vy: Math.cos(spread) * speed + randomBetween(42, 118),
+          life: max,
+          max,
+          size: isStar ? randomBetween(4, 7) : randomBetween(3, 5.5),
+          hue: hues[index % hues.length],
+          celebration: isStar ? "record-star" : "record-confetti",
+          rotation: randomBetween(0, Math.PI * 2),
+          spin: randomBetween(-10, 10),
+        });
+      }
+      world.shake = Math.max(world.shake, 0.55);
+      if (world.particles.length > 190) world.particles.splice(0, world.particles.length - 190);
+    };
+
     const update = (delta: number, now: number, viewHeight: number) => {
       const world = worldRef.current;
       world.t += delta * 1000;
@@ -636,6 +665,7 @@ export default function Home() {
         particle.x += particle.vx * delta;
         particle.y += particle.vy * delta;
         particle.vy -= 320 * delta;
+        particle.rotation = (particle.rotation || 0) + (particle.spin || 0) * delta;
         return particle.life > 0;
       });
       world.highestY = Math.max(world.highestY, player.y - 60);
@@ -656,6 +686,7 @@ export default function Home() {
         setRecordFlash(true);
         window.setTimeout(() => setRecordFlash(false), 1600);
         puff(world, player.x, player.y, 22, 45);
+        recordBurst(world, player.x, player.y);
         playNewRecordSound();
       }
 
@@ -907,7 +938,29 @@ export default function Home() {
         context.globalAlpha = particle.life / particle.max;
         context.fillStyle = `hsl(${particle.hue} 88% 76%)`;
         context.translate(x, y);
-        if (particle.mode === "leaf" || particle.mode === "ember") {
+        if (particle.celebration === "record-star") {
+          const radius = particle.size * scale;
+          context.globalCompositeOperation = "screen";
+          context.shadowColor = `hsl(${particle.hue} 92% 72%)`;
+          context.shadowBlur = radius * 2.5;
+          context.rotate(particle.rotation || 0);
+          context.beginPath();
+          for (let point = 0; point < 8; point += 1) {
+            const angle = -Math.PI / 2 + point * Math.PI / 4;
+            const distance = point % 2 === 0 ? radius : radius * 0.38;
+            const px = Math.cos(angle) * distance;
+            const py = Math.sin(angle) * distance;
+            if (point === 0) context.moveTo(px, py);
+            else context.lineTo(px, py);
+          }
+          context.closePath();
+          context.fill();
+        } else if (particle.celebration === "record-confetti") {
+          context.rotate(particle.rotation || 0);
+          const confettiWidth = particle.size * scale * 0.7;
+          const confettiHeight = particle.size * scale * 1.8;
+          context.fillRect(-confettiWidth / 2, -confettiHeight / 2, confettiWidth, confettiHeight);
+        } else if (particle.mode === "leaf" || particle.mode === "ember") {
           context.rotate((particle.vx + particle.vy) * 0.008);
           context.beginPath();
           context.ellipse(0, 0, particle.size * scale * (particle.aspect || 1), particle.size * scale * 0.68, 0, 0, Math.PI * 2);
