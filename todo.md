@@ -3,3 +3,5 @@
 - [x] Remove the remaining decorative knight/background artwork from the menu.
 - [x] Replace Space-to-pause with a one-use aerial boost that supports higher climbs.
 - [x] Verify the control changes and save an updated checkpoint.
+- [x] Remove the colored background artifact around the player knight.
+- [x] Verify the clean in-game knight rendering and save an updated checkpoint.

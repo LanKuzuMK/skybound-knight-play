@@ -53,7 +53,6 @@ const ART = {
   menu: "/manus-storage/skybound-menu-sky_f3f3d42c.jpg",
   sky: "/manus-storage/skybound-game-sky_36ed0a53.jpg",
   castle: "/manus-storage/skybound-castle-horizon_d6571e75.jpg",
-  knight: "/manus-storage/skybound-knight-idle_34f141e5.png",
   mark: "/manus-storage/skybound-compass-mark_04c7d693.png",
 };
 
@@ -507,28 +506,52 @@ export default function Home() {
       context.scale(squashX, squashY);
       context.shadowColor = "rgba(30,65,124,.32)";
       context.shadowBlur = 14 * scale;
-      const image = artRef.current.knight;
-      if (image?.complete && image.naturalWidth > 0) {
-        context.drawImage(image, -34 * scale, -42 * scale, 68 * scale, 68 * scale);
-      } else {
-        context.fillStyle = "#e9edf6";
-        context.beginPath();
-        context.arc(0, -9 * scale, 18 * scale, Math.PI, 0);
-        context.lineTo(18 * scale, 16 * scale);
-        context.lineTo(-18 * scale, 16 * scale);
-        context.closePath();
-        context.fill();
-        context.fillStyle = "#3d67be";
-        context.beginPath();
-        context.moveTo(12 * scale, 0);
-        context.quadraticCurveTo(32 * scale, 8 * scale, 27 * scale, 28 * scale);
-        context.lineTo(8 * scale, 19 * scale);
-        context.fill();
-        context.fillStyle = "#f2be59";
-        context.beginPath();
-        context.arc(0, -4 * scale, 8 * scale, 0, Math.PI * 2);
-        context.fill();
-      }
+      // A self-drawn knight keeps the player crisp and guarantees no sprite backdrop enters the game world.
+      context.fillStyle = "#3a5f96";
+      context.beginPath();
+      context.ellipse(15 * scale, 12 * scale, 10 * scale, 18 * scale, -0.38, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = "#3d67be";
+      context.beginPath();
+      context.moveTo(10 * scale, -1 * scale);
+      context.quadraticCurveTo(34 * scale, 8 * scale, 28 * scale, 30 * scale);
+      context.lineTo(6 * scale, 20 * scale);
+      context.closePath();
+      context.fill();
+      context.fillStyle = "#f6f7f1";
+      context.strokeStyle = "#315d95";
+      context.lineWidth = 2 * scale;
+      context.beginPath();
+      context.moveTo(-12 * scale, 2 * scale);
+      context.lineTo(12 * scale, 2 * scale);
+      context.lineTo(15 * scale, 24 * scale);
+      context.lineTo(-15 * scale, 24 * scale);
+      context.closePath();
+      context.fill();
+      context.stroke();
+      context.fillStyle = "#eaf0f1";
+      context.beginPath();
+      context.arc(0, -10 * scale, 17 * scale, Math.PI, 0);
+      context.lineTo(17 * scale, 1 * scale);
+      context.lineTo(-17 * scale, 1 * scale);
+      context.closePath();
+      context.fill();
+      context.stroke();
+      context.fillStyle = "#234a7c";
+      context.beginPath();
+      context.roundRect(-12 * scale, -8 * scale, 24 * scale, 7 * scale, 3 * scale);
+      context.fill();
+      context.fillStyle = "#f2c05b";
+      context.beginPath();
+      context.moveTo(0, 7 * scale);
+      context.lineTo(5 * scale, 13 * scale);
+      context.lineTo(0, 19 * scale);
+      context.lineTo(-5 * scale, 13 * scale);
+      context.closePath();
+      context.fill();
+      context.fillStyle = "#324f75";
+      context.fillRect(-14 * scale, 23 * scale, 10 * scale, 4 * scale);
+      context.fillRect(5 * scale, 23 * scale, 10 * scale, 4 * scale);
       context.restore();
     };
 
