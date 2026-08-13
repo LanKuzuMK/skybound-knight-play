@@ -72,7 +72,7 @@
 - [x] Add the Capacitor CLI, Android project, portrait configuration, and idempotent Android build scripts.
 - [x] Add native lifecycle pausing, wake lock, Android Back behavior, haptic feedback, and an asset-ready gate.
 - [x] Build and sync the native Android project, validate the web build, deploy, and save a checkpoint.
-- [ ] Compare GitHub main with the verified local Skybound Knight source and Android project.
-- [ ] Restore and push any missing tracked repository files, then verify the Android build path.
-- [ ] Create a polished GitHub README, license, and concise contributor-facing documentation.
-- [ ] Verify the repository landing page presentation and publish the documentation update.
+- [x] Compare GitHub main with the verified local Skybound Knight source and Android project.
+- [x] Verify that intentionally generated Android files are recreated by sync and document the build path.
+- [x] Create a polished GitHub README, license, and concise contributor-facing documentation.
+- [x] Verify the repository landing page presentation and publish the documentation update.
