@@ -57,3 +57,5 @@
 - [x] Reduce the mobile gameplay scale while preserving readable knight and platform sizes.
 - [x] Make equipped-style notices fade automatically and clear before they obstruct the HUD.
 - [x] Validate the phone layout, deploy the fix, and save a checkpoint.
+- [x] Repair the missing Sky Lore visual source and frame it reliably.
+- [x] Verify responsive About-page rendering, deploy the repair, and save a checkpoint.
