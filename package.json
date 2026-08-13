@@ -1,8 +1,26 @@
 {
   "name": "skybound-knight-play",
   "version": "1.0.0",
+  "description": "A responsive endless vertical fantasy platformer built with React, Vite, Canvas, and Capacitor.",
   "type": "module",
   "license": "MIT",
+  "author": "LanKuzuMK",
+  "homepage": "https://skybound-knight-play.pages.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LanKuzuMK/skybound-knight-play.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LanKuzuMK/skybound-knight-play/issues"
+  },
+  "keywords": [
+    "platformer",
+    "fantasy-game",
+    "react",
+    "capacitor",
+    "android",
+    "html5-game"
+  ],
   "scripts": {
     "dev": "vite --host",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
