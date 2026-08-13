@@ -4,6 +4,9 @@
  */
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { App } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
+import { ScreenOrientation } from "@capacitor/screen-orientation";
 import {
   ChevronLeft,
   Cloud,
@@ -27,6 +30,7 @@ type Modal = "none" | "settings" | "about" | "profile" | "shop";
 type PlatformKind = "cloud" | "moving" | "fading" | "spring";
 type EffectMode = "starlight" | "ember" | "mist" | "leaf" | "lunar" | "rose" | "aurora" | "storm" | "sunforge" | "void";
 type CelebrationIntensity = "subtle" | "vivid";
+type HapticEvent = "boost" | "landing" | "record" | "fall";
 
 type KnightStyle = {
   id: string;
@@ -200,6 +204,8 @@ export default function Home() {
   const audioRef = useRef<AudioContext | null>(null);
   const audioGraphRef = useRef<AudioGraph | null>(null);
   const bgmRef = useRef<BgmState | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const lastHapticAtRef = useRef(0);
   const worldRef = useRef<World>({
     player: { x: 500, y: 95, vx: 0, vy: 0, squash: 0, landing: 0, boostAvailable: true },
     platforms: [], particles: [], cameraY: 0, highestY: 0, nextPlatformId: 1, lastHudAt: 0, lastTrailAt: 0, t: 0, shake: 0, runRewarded: false,
@@ -230,6 +236,7 @@ export default function Home() {
   const [armoryNoticeKey, setArmoryNoticeKey] = useState(0);
   const [joystickOffset, setJoystickOffset] = useState({ x: 0, y: 0 });
   const [joystickActive, setJoystickActive] = useState(false);
+  const [assetsReady, setAssetsReady] = useState(false);
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -293,11 +300,28 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    Object.entries(ART).forEach(([key, src]) => {
+    let active = true;
+    const images = Object.entries(ART).map(([key, src]) => new Promise<void>((resolve) => {
       const image = new Image();
+      image.decoding = "async";
+      image.onload = () => {
+        artRef.current[key] = image;
+        void image.decode().catch(() => undefined).finally(resolve);
+      };
+      image.onerror = () => resolve();
       image.src = src;
       artRef.current[key] = image;
+    }));
+    const timeout = window.setTimeout(() => {
+      if (active) setAssetsReady(true);
+    }, 2400);
+    void Promise.allSettled(images).finally(() => {
+      if (active) setAssetsReady(true);
     });
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
   }, []);
 
   const audioContext = useCallback(() => {
@@ -639,6 +663,20 @@ export default function Home() {
     setArmoryNoticeKey((current) => current + 1);
   }, []);
 
+  const playHaptic = useCallback((event: HapticEvent) => {
+    if (!isTouchFirst() || document.visibilityState !== "visible") return;
+    const now = performance.now();
+    if (now - lastHapticAtRef.current < 70) return;
+    lastHapticAtRef.current = now;
+    const pattern: Record<HapticEvent, number | number[]> = {
+      boost: 10,
+      landing: 7,
+      record: [12, 34, 18],
+      fall: 20,
+    };
+    try { navigator.vibrate?.(pattern[event]); } catch { /* haptics are an optional enhancement */ }
+  }, []);
+
   const saveProfileName = () => {
     const nextName = profileNameDraft.trim().slice(0, 18) || "Skyward Guest";
     setProfile((current) => ({ ...current, name: nextName }));
@@ -683,11 +721,107 @@ export default function Home() {
     world.shake = Math.max(world.shake, 0.42);
     setBoostReady(false);
     emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, player.y - 16, "trail", 10);
-    if (navigator.vibrate) navigator.vibrate(12);
+    playHaptic("boost");
     playNoise(0.075, 0.026, 1900, "boost-air", 0.06);
     playTone(620, 0.11, "triangle", 0.05, 980);
     window.setTimeout(() => playTone(980, 0.12, "sine", 0.026, 1240), 68);
-  }, [playNoise, playTone]);
+  }, [playHaptic, playNoise, playTone]);
+
+  const acquireWakeLock = useCallback(async () => {
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    if (wakeLockRef.current && !wakeLockRef.current.released) return;
+    try {
+      const sentinel = await navigator.wakeLock.request("screen");
+      wakeLockRef.current = sentinel;
+      sentinel.addEventListener("release", () => {
+        if (wakeLockRef.current === sentinel) wakeLockRef.current = null;
+      });
+    } catch (error) {
+      console.info("[Skybound] Screen wake lock is unavailable", error);
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(async () => {
+    const sentinel = wakeLockRef.current;
+    wakeLockRef.current = null;
+    if (sentinel && !sentinel.released) await sentinel.release();
+  }, []);
+
+  const returnToMenu = useCallback(() => {
+    modalRef.current = "none";
+    setModal("none");
+    screenRef.current = "menu";
+    setScreen("menu");
+    pauseBgm();
+  }, [pauseBgm]);
+
+  useEffect(() => {
+    const keepAwake = screen === "playing" && modal === "none";
+    if (keepAwake) void acquireWakeLock();
+    else void releaseWakeLock();
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (screenRef.current === "playing") pauseRun();
+        void releaseWakeLock();
+      } else if (screenRef.current === "playing" && modalRef.current === "none") {
+        void acquireWakeLock();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void releaseWakeLock();
+    };
+  }, [acquireWakeLock, modal, pauseRun, releaseWakeLock, screen]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    void ScreenOrientation.lock({ orientation: "portrait" }).catch((error) => {
+      console.info("[Skybound] Portrait lock is unavailable", error);
+    });
+    return () => { void ScreenOrientation.unlock().catch(() => undefined); };
+  }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let disposed = false;
+    let removeBackListener: (() => Promise<void>) | undefined;
+    let removeStateListener: (() => Promise<void>) | undefined;
+
+    void App.addListener("backButton", () => {
+      if (modalRef.current !== "none") {
+        closeModal();
+        return;
+      }
+      if (screenRef.current === "playing") {
+        pauseRun();
+        return;
+      }
+      if (screenRef.current === "paused" || screenRef.current === "gameover") {
+        returnToMenu();
+        return;
+      }
+      void App.minimizeApp();
+    }).then((listener) => {
+      if (disposed) void listener.remove();
+      else removeBackListener = listener.remove;
+    });
+
+    void App.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive && screenRef.current === "playing") pauseRun();
+    }).then((listener) => {
+      if (disposed) void listener.remove();
+      else removeStateListener = listener.remove;
+    });
+
+    return () => {
+      disposed = true;
+      void removeBackListener?.();
+      void removeStateListener?.();
+    };
+  }, [closeModal, pauseRun, returnToMenu]);
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
@@ -733,7 +867,9 @@ export default function Home() {
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const device = navigator as Navigator & { deviceMemory?: number };
+      const constrainedPhone = (device.deviceMemory ?? 8) <= 4 || (navigator.hardwareConcurrency ?? 8) <= 4;
+      const ratio = Math.min(window.devicePixelRatio || 1, constrainedPhone ? 1.5 : 2);
       width = rect.width;
       height = rect.height;
       canvas.width = Math.round(width * ratio);
@@ -830,6 +966,7 @@ export default function Home() {
             emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, platform.y + 5, "landing", platform.kind === "spring" ? 15 : 9);
             playNoise(platform.kind === "spring" ? 0.1 : 0.055, platform.kind === "spring" ? 0.03 : 0.022, platform.kind === "spring" ? 2100 : 1300, platform.kind === "spring" ? "spring-noise" : "landing-noise", 0.07);
             playTone(platform.kind === "spring" ? 660 : 440, platform.kind === "spring" ? 0.22 : 0.1, platform.kind === "spring" ? "triangle" : "sine", 0.035, platform.kind === "spring" ? 990 : 530);
+            playHaptic("landing");
             break;
           }
         }
@@ -869,6 +1006,7 @@ export default function Home() {
         puff(world, player.x, player.y, 22, 45);
         recordBurst(world, player.x, player.y);
         playNewRecordSound();
+        playHaptic("record");
       }
 
       if (now - world.lastHudAt > 85) {
@@ -889,6 +1027,7 @@ export default function Home() {
         pauseBgm();
         playNoise(0.16, 0.027, 720, "fall-noise", 0.18);
         playTone(311.13, 0.36, "triangle", 0.055, 120);
+        playHaptic("fall");
       }
     };
 
@@ -1187,7 +1326,7 @@ export default function Home() {
     };
     frameRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(frameRef.current); observer.disconnect(); };
-  }, [makePlatform, pauseBgm, playNewRecordSound, playNoise, playTone, setNightSkyArrangement]);
+  }, [makePlatform, pauseBgm, playHaptic, playNewRecordSound, playNoise, playTone, setNightSkyArrangement]);
 
   useEffect(() => () => {
     const bgm = bgmRef.current;
@@ -1269,9 +1408,10 @@ export default function Home() {
   }, [modal, resetJoystick, screen]);
 
   return (
-    <main className="skybound-shell" data-app="skybound-knight" data-screen={screen} data-player={profile.name} data-equipped-style={profile.selected} data-content-protection="basic-deterrent">
+    <main className="skybound-shell" data-app="skybound-knight" data-screen={screen} data-player={profile.name} data-equipped-style={profile.selected} data-content-protection="basic-deterrent" data-assets={assetsReady ? "ready" : "loading"} aria-busy={!assetsReady}>
       <canvas ref={canvasRef} className="game-canvas" aria-label="Skybound Knight game world" data-renderer="canvas" data-inspect-role="visual-game-layer" />
       <div className="sky-grain" aria-hidden="true" />
+      {!assetsReady && <section className="asset-ready-gate" role="status" aria-live="polite"><div className="asset-ready-crest brand-crest" aria-hidden="true"><span>✦</span></div><p>Preparing the skyward route…</p></section>}
       <output className="inspectable-game-state" data-inspect-role="game-state" data-height={hud.current} data-best-height={hud.best} data-height-points={profile.points} data-unlocked-styles={profile.unlocked.length} aria-live="polite">{`${profile.name}: ${hud.current} metres, ${profile.points} height points, ${profile.unlocked.length} styles unlocked.`}</output>
 
       {armoryNotice && <output className={`armory-notice ${armoryNoticeFading ? "is-fading" : ""}`} role="status" aria-live="polite">{armoryNotice}</output>}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Skybound Knight</string>
+    <string name="title_activity_main">Skybound Knight</string>
+    <string name="package_name">com.mk.skyboundknight</string>
+    <string name="custom_url_scheme">com.mk.skyboundknight</string>
+</resources>

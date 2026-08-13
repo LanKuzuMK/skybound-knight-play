@@ -1,17 +1,23 @@
 # Android APK Build — Skybound Knight
 
-Skybound Knight remains a normal, inspectable web application while also being prepared for an Android wrapper through Capacitor. The game bundle is produced at `dist/public`, which is the exact folder configured as the Android web payload.
+Skybound Knight remains a normal, inspectable web application while also being packaged through Capacitor for Android. The game bundle is produced at `dist/public`, which is the exact folder copied into the Android WebView payload. The native `android/` project is included in this repository and the debug APK path has been verified locally.
 
 ## One-time Android setup
 
-Install Android Studio with the Android SDK and a compatible JDK. The project uses Capacitor Android 8. Install the Capacitor command-line package only in the local Android build environment; keeping it out of the web-hosting manifest avoids unnecessary static-site build dependencies.
+Install Android Studio with Android SDK Platform 36, Android Build Tools, and JDK 21. The project uses Capacitor Android 8 and already includes the Capacitor command-line package.
 
 ```bash
-pnpm add -D @capacitor/cli@8.5.0
-pnpm run android:prepare
+pnpm install --frozen-lockfile
+pnpm run android:sync
 ```
 
-The first command creates the `android/` native project and copies the current web build into it. After that initial setup, use the sync command whenever the web game changes.
+Use `pnpm run android:sync` after every web-game change. If cloning an older branch without the native project, run `pnpm run android:add` once before syncing.
+
+## Native launch safeguards
+
+The Android wrapper locks the activity to portrait mode and uses a cutout-aware theme. In-game code also locks native orientation defensively, pauses when the app backgrounds, intercepts the Android Back action to pause or close overlays first, keeps the display awake only during an active climb when available, preloads visual assets before interaction, and applies restrained touch haptics for boost, landings, records, and falls.
+
+The web build continues to work normally: these native-only features are guarded through Capacitor platform detection.
 
 ## Build an installable debug APK
 
@@ -27,7 +33,7 @@ The APK is generated at `android/app/build/outputs/apk/debug/app-debug.apk`.
 pnpm run android:release
 ```
 
-For Google Play distribution, open the generated Android project in Android Studio and configure a signing key before generating the final signed AAB or APK.
+For Google Play distribution, open the generated Android project in Android Studio, configure a signing key, increase `versionCode` and `versionName`, test on physical phones with a notch or punch-hole camera, and generate the signed AAB. The included debug APK is only for testing and must not be submitted to Google Play.
 
 ## Web inspectability and offline data
 

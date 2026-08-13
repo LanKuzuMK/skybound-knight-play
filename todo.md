@@ -69,3 +69,6 @@
 - [x] Verify the clean mobile playfield, deploy the fix, and save a checkpoint.
 - [x] Audit Android APK readiness across safe areas, orientation, wake lock, haptics, back navigation, and asset preloading.
 - [x] Produce an implementation-ready launch checklist with prioritized mobile fixes.
+- [x] Add the Capacitor CLI, Android project, portrait configuration, and idempotent Android build scripts.
+- [x] Add native lifecycle pausing, wake lock, Android Back behavior, haptic feedback, and an asset-ready gate.
+- [x] Build and sync the native Android project, validate the web build, deploy, and save a checkpoint.
