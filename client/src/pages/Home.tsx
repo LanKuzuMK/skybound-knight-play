@@ -38,7 +38,7 @@ type Platform = {
 type Particle = { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; hue: number };
 
 type World = {
-  player: { x: number; y: number; vx: number; vy: number; squash: number; landing: number };
+  player: { x: number; y: number; vx: number; vy: number; squash: number; landing: number; boostAvailable: boolean };
   platforms: Platform[];
   particles: Particle[];
   cameraY: number;
@@ -94,7 +94,7 @@ export default function Home() {
   const ambientRef = useRef<{ gain: GainNode; oscillators: OscillatorNode[] } | null>(null);
   const melodyTimerRef = useRef<number | null>(null);
   const worldRef = useRef<World>({
-    player: { x: 500, y: 95, vx: 0, vy: 0, squash: 0, landing: 0 },
+    player: { x: 500, y: 95, vx: 0, vy: 0, squash: 0, landing: 0, boostAvailable: true },
     platforms: [], particles: [], cameraY: 0, highestY: 0, nextPlatformId: 1, lastHudAt: 0, t: 0, shake: 0,
   });
 
@@ -106,6 +106,7 @@ export default function Home() {
   const [isTouch, setIsTouch] = useState(isTouchFirst);
   const [hud, setHud] = useState({ current: 0, best: getStoredNumber("skybound-best") });
   const [recordFlash, setRecordFlash] = useState(false);
+  const [boostReady, setBoostReady] = useState(true);
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -222,7 +223,7 @@ export default function Home() {
 
   const resetWorld = useCallback(() => {
     const world = worldRef.current;
-    world.player = { x: 500, y: 104, vx: 0, vy: 800, squash: 0, landing: 0 };
+    world.player = { x: 500, y: 104, vx: 0, vy: 800, squash: 0, landing: 0, boostAvailable: true };
     world.platforms = [{ id: 0, x: 365, y: 50, width: 270, kind: "cloud", phase: 0, amplitude: 0 }];
     world.particles = [];
     world.cameraY = 0;
@@ -233,6 +234,7 @@ export default function Home() {
     while (world.platforms[world.platforms.length - 1].y < 1900) makePlatform(world);
     setHud({ current: 0, best: bestRef.current });
     setRecordFlash(false);
+    setBoostReady(true);
   }, [makePlatform]);
 
   const beginRun = useCallback(() => {
@@ -275,15 +277,30 @@ export default function Home() {
     playTone(523.25, 0.07, "sine", 0.025);
   }, [playTone]);
 
+  const useBoost = useCallback(() => {
+    const world = worldRef.current;
+    const player = world.player;
+    if (screenRef.current !== "playing" || modalRef.current !== "none" || !player.boostAvailable) return;
+    player.boostAvailable = false;
+    player.vy = Math.max(player.vy + 440, 1090);
+    player.squash = 0.52;
+    world.shake = Math.max(world.shake, 0.42);
+    setBoostReady(false);
+    for (let index = 0; index < 12; index += 1) {
+      const life = randomBetween(0.24, 0.52);
+      world.particles.push({ x: player.x, y: player.y - 16, vx: randomBetween(-92, 92), vy: randomBetween(-220, -65), life, max: life, size: randomBetween(2.4, 5.5), hue: index % 2 ? 47 : 202 });
+    }
+    if (navigator.vibrate) navigator.vibrate(12);
+    playTone(620, 0.11, "triangle", 0.05, 980);
+    window.setTimeout(() => playTone(980, 0.12, "sine", 0.026, 1240), 68);
+  }, [playTone]);
+
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
       if (["ArrowLeft", "ArrowRight", "Space"].includes(event.code)) event.preventDefault();
       if (event.code === "KeyA" || event.code === "ArrowLeft") keysRef.current.left = true;
       if (event.code === "KeyD" || event.code === "ArrowRight") keysRef.current.right = true;
-      if (event.code === "Space" && modalRef.current === "none") {
-        if (screenRef.current === "playing") pauseRun();
-        else if (screenRef.current === "paused") resumeRun();
-      }
+      if (event.code === "Space") useBoost();
       if (event.code === "Escape" && screenRef.current === "playing") pauseRun();
     };
     const keyUp = (event: KeyboardEvent) => {
@@ -293,7 +310,7 @@ export default function Home() {
     window.addEventListener("keydown", keyDown, { passive: false });
     window.addEventListener("keyup", keyUp);
     return () => { window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp); };
-  }, [pauseRun, resumeRun]);
+  }, [pauseRun, useBoost]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -362,6 +379,8 @@ export default function Home() {
             player.vy = platform.kind === "spring" ? 975 : 785;
             player.squash = 1;
             player.landing = 1;
+            player.boostAvailable = true;
+            setBoostReady(true);
             world.shake = platform.kind === "spring" ? 0.75 : 0.32;
             if (platform.kind === "fading" && !platform.fadingAt) platform.fadingAt = now;
             puff(world, player.x, platform.y + 4, platform.kind === "spring" ? 16 : 10, platform.kind === "spring" ? 47 : 37);
@@ -643,6 +662,7 @@ export default function Home() {
           <div className="score-stack" aria-live="polite">
             <div className="score-pill"><span>ALTITUDE</span><strong>{hud.current.toLocaleString()}<small> m</small></strong></div>
             <div className="best-pill"><Trophy size={13} /><span>BEST {hud.best.toLocaleString()} m</span></div>
+            {screen === "playing" && <div className={`boost-pill ${boostReady ? "" : "is-spent"}`}><Sparkles size={12} /><span>{boostReady ? "SPACE · BOOST READY" : "BOOST USED · LAND TO RECHARGE"}</span></div>}
           </div>
         )}
         <div className="hud-actions">
@@ -657,7 +677,6 @@ export default function Home() {
 
       {screen === "menu" && modal === "none" && (
         <section className="menu-stage" aria-label="Skybound Knight main menu">
-          <div className="menu-world-art" style={{ backgroundImage: `url(${ART.menu})` }} aria-hidden="true" />
           <div className="menu-vignette" />
           <div className="expedition-window" aria-hidden="true">
             <div className="window-field-note note-top">CASTLEWARD<br /><b>01</b></div>
@@ -668,7 +687,6 @@ export default function Home() {
             <div className="castle-beacon" />
             <div className="ascent-thread"><span /><span /><span /><span /></div>
             <div className="route-platform platform-one" /><div className="route-platform platform-two" /><div className="route-platform platform-three" /><div className="route-platform platform-four" />
-            <div className="journey-knight"><i /><b /><span /></div>
             <div className="compass-pip pip-one">✦</div><div className="compass-pip pip-two">✦</div>
           </div>
           <div className="menu-copy">
@@ -684,8 +702,7 @@ export default function Home() {
             </div>
             <div className="menu-best"><Trophy size={15} /><span>Highest horizon</span><strong>{hud.best.toLocaleString()} m</strong></div>
           </div>
-          <div className="menu-knight-frame"><div className="menu-knight-sprite" style={{ backgroundImage: `url(${ART.knight})` }} role="img" aria-label="A tiny knight ready to climb" /><span>A new horizon is waiting.</span></div>
-          {!isTouch && <div className="key-hint"><Keyboard size={15} /><span><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> to steer</span></div>}
+          {!isTouch && <div className="key-hint"><Keyboard size={15} /><span><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> steer · <kbd>Space</kbd> boost</span></div>}
         </section>
       )}
 
@@ -708,6 +725,7 @@ export default function Home() {
       {isTouch && screen === "playing" && modal === "none" && (
         <div className="touch-controls" aria-label="Touch movement controls">
           <button className="touch-button" onPointerDown={() => beginTouch("left")} onPointerUp={() => endTouch("left")} onPointerCancel={() => endTouch("left")} onPointerLeave={() => endTouch("left")} aria-label="Move left">←</button>
+          <button className={`touch-button touch-boost ${boostReady ? "" : "is-spent"}`} onPointerDown={useBoost} aria-label={boostReady ? "Use aerial boost" : "Boost used; land to recharge"} disabled={!boostReady}>↟</button>
           <button className="touch-button" onPointerDown={() => beginTouch("right")} onPointerUp={() => endTouch("right")} onPointerCancel={() => endTouch("right")} onPointerLeave={() => endTouch("right")} aria-label="Move right">→</button>
         </div>
       )}

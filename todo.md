@@ -1,0 +1,5 @@
+- [x] Remove the user-selected background from the Skybound Knight main menu.
+- [x] Verify the revised desktop composition and save a new checkpoint.
+- [x] Remove the remaining decorative knight/background artwork from the menu.
+- [x] Replace Space-to-pause with a one-use aerial boost that supports higher climbs.
+- [x] Verify the control changes and save an updated checkpoint.
