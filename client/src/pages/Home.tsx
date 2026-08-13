@@ -1,6 +1,6 @@
 /**
  * Dawnveil Reverie: a luminous, handcrafted fantasy ascent. UI is airy editorial
- * framing; gameplay readability wins over ornament; motion is calm, tactile, and precise.
+ * framing; gameplay readability wins over ornament; motion, clean sound, and responsive armory feedback stay tactile and precise.
  */
 import { Button } from "@/components/ui/button";
 import {
@@ -32,10 +32,12 @@ type KnightStyle = {
   epithet: string;
   cost: number;
   effect: EffectMode;
+  avatar?: "mage";
   colors: { armor: string; visor: string; cape: string; crest: string; boots: string; trailHue: number; landingHue: number };
 };
 
 type LocalProfile = { name: string; points: number; best: number; unlocked: string[]; selected: string };
+type AudioGraph = { master: GainNode; compressor: DynamicsCompressorNode; active: Set<OscillatorNode | AudioBufferSourceNode>; lastByKey: Map<string, number> };
 
 type Platform = {
   id: number;
@@ -80,7 +82,7 @@ const PROFILE_STORAGE_KEY = "skybound-profile-v2";
 const KNIGHT_STYLES: KnightStyle[] = [
   { id: "dawn-squire", name: "Dawn Squire", epithet: "The first brave step", cost: 0, effect: "starlight", colors: { armor: "#eaf0f1", visor: "#234a7c", cape: "#3d67be", crest: "#f2c05b", boots: "#324f75", trailHue: 202, landingHue: 43 } },
   { id: "ember-warden", name: "Ember Warden", epithet: "A warm spark in thin air", cost: 180, effect: "ember", colors: { armor: "#fff0d6", visor: "#7d3528", cape: "#c85139", crest: "#f3b54d", boots: "#71372f", trailHue: 20, landingHue: 34 } },
-  { id: "mist-ranger", name: "Mist Ranger", epithet: "Quiet as a cloud bank", cost: 360, effect: "mist", colors: { armor: "#e9f8f4", visor: "#246a75", cape: "#4fa7a4", crest: "#d6f0d6", boots: "#255860", trailHue: 181, landingHue: 164 } },
+  { id: "aether-mage", name: "Aether Mage", epithet: "The arcane routefinder", cost: 120, effect: "lunar", avatar: "mage", colors: { armor: "#eeeafd", visor: "#54467d", cape: "#8270bf", crest: "#f5dc86", boots: "#453766", trailHue: 264, landingHue: 282 } },
   { id: "verdant-vow", name: "Verdant Vow", epithet: "Promise of the floating grove", cost: 620, effect: "leaf", colors: { armor: "#eaf1d4", visor: "#395c37", cape: "#688a49", crest: "#d4ba5c", boots: "#3d5f3c", trailHue: 97, landingHue: 77 } },
   { id: "moon-archivist", name: "Moon Archivist", epithet: "Keeper of silver routes", cost: 950, effect: "lunar", colors: { armor: "#eeebf7", visor: "#55487f", cape: "#7868ae", crest: "#ebdbff", boots: "#4d4972", trailHue: 264, landingHue: 280 } },
   { id: "rose-vanguard", name: "Rose Vanguard", epithet: "Courage in bloom", cost: 1350, effect: "rose", colors: { armor: "#fff0f0", visor: "#92435d", cape: "#d86e87", crest: "#f7c0a8", boots: "#793c58", trailHue: 345, landingHue: 12 } },
@@ -140,10 +142,13 @@ function loadProfile(): LocalProfile {
     const saved = window.localStorage.getItem(PROFILE_STORAGE_KEY);
     const parsed = saved ? JSON.parse(saved) as Partial<LocalProfile> : null;
     const legacyBest = getStoredNumber("skybound-best");
-    const unlocked = Array.isArray(parsed?.unlocked) && parsed!.unlocked.includes("dawn-squire")
-      ? parsed!.unlocked.filter((id) => KNIGHT_STYLES.some((style) => style.id === id))
+    const migrateStyle = (id: string) => id === "mist-ranger" ? "aether-mage" : id;
+    const rawUnlocked = Array.isArray(parsed?.unlocked) ? parsed!.unlocked.map(migrateStyle) : [];
+    const unlocked = rawUnlocked.includes("dawn-squire")
+      ? Array.from(new Set(rawUnlocked.filter((id) => KNIGHT_STYLES.some((style) => style.id === id))))
       : DEFAULT_PROFILE.unlocked;
-    const selected = unlocked.includes(parsed?.selected || "") ? parsed!.selected! : "dawn-squire";
+    const selectedCandidate = typeof parsed?.selected === "string" ? migrateStyle(parsed.selected) : "";
+    const selected = unlocked.includes(selectedCandidate) ? selectedCandidate : "dawn-squire";
     return {
       name: typeof parsed?.name === "string" && parsed.name.trim() ? parsed.name.trim().slice(0, 18) : DEFAULT_PROFILE.name,
       points: Math.max(0, Number(parsed?.points) || 0),
@@ -170,6 +175,7 @@ export default function Home() {
   const bestRef = useRef(0);
   const artRef = useRef<Record<string, HTMLImageElement>>({});
   const audioRef = useRef<AudioContext | null>(null);
+  const audioGraphRef = useRef<AudioGraph | null>(null);
   const ambientRef = useRef<{ gain: GainNode; oscillators: OscillatorNode[] } | null>(null);
   const melodyTimerRef = useRef<number | null>(null);
   const worldRef = useRef<World>({
@@ -190,6 +196,7 @@ export default function Home() {
   const [boostReady, setBoostReady] = useState(true);
   const [runReward, setRunReward] = useState(0);
   const [profileNameDraft, setProfileNameDraft] = useState(profile.name);
+  const [armoryNotice, setArmoryNotice] = useState("");
 
   useEffect(() => {
     mutedRef.current = muted;
@@ -234,22 +241,72 @@ export default function Home() {
     return audioRef.current;
   }, []);
 
-  const playTone = useCallback((frequency: number, seconds = 0.12, type: OscillatorType = "sine", volume = 0.045, endFrequency?: number) => {
-    if (mutedRef.current) return;
+  const getAudioGraph = useCallback(() => {
     const context = audioContext();
-    if (!context) return;
+    if (!context) return null;
+    if (!audioGraphRef.current) {
+      const master = context.createGain();
+      const compressor = context.createDynamicsCompressor();
+      master.gain.value = 0.46;
+      compressor.threshold.value = -18;
+      compressor.knee.value = 18;
+      compressor.ratio.value = 7;
+      compressor.attack.value = 0.008;
+      compressor.release.value = 0.16;
+      master.connect(compressor).connect(context.destination);
+      audioGraphRef.current = { master, compressor, active: new Set(), lastByKey: new Map() };
+    }
+    return { context, graph: audioGraphRef.current };
+  }, [audioContext]);
+
+  const playTone = useCallback((frequency: number, seconds = 0.12, type: OscillatorType = "sine", volume = 0.045, endFrequency?: number, key = "tone", cooldown = 0.035) => {
+    if (mutedRef.current) return;
+    const audio = getAudioGraph();
+    if (!audio) return;
+    const { context, graph } = audio;
+    const now = context.currentTime;
+    if (now - (graph.lastByKey.get(key) ?? -Infinity) < cooldown || graph.active.size >= 12) return;
+    graph.lastByKey.set(key, now);
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, context.currentTime);
-    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(12, endFrequency), context.currentTime + seconds);
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(volume, context.currentTime + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + seconds);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + seconds + 0.02);
-  }, [audioContext]);
+    oscillator.frequency.setValueAtTime(frequency, now);
+    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(12, endFrequency), now + seconds);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + Math.min(0.014, seconds * 0.22));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+    oscillator.connect(gain).connect(graph.master);
+    graph.active.add(oscillator);
+    oscillator.onended = () => graph.active.delete(oscillator);
+    oscillator.start(now);
+    oscillator.stop(now + seconds + 0.025);
+  }, [getAudioGraph]);
+
+  const playNoise = useCallback((seconds: number, volume: number, cutoff: number, key: string, cooldown = 0.08) => {
+    if (mutedRef.current) return;
+    const audio = getAudioGraph();
+    if (!audio) return;
+    const { context, graph } = audio;
+    const now = context.currentTime;
+    if (now - (graph.lastByKey.get(key) ?? -Infinity) < cooldown || graph.active.size >= 12) return;
+    graph.lastByKey.set(key, now);
+    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * seconds), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let index = 0; index < data.length; index += 1) data[index] = (Math.random() * 2 - 1) * (1 - index / data.length);
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    filter.type = "lowpass";
+    filter.frequency.value = cutoff;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+    source.buffer = buffer;
+    source.connect(filter).connect(gain).connect(graph.master);
+    graph.active.add(source);
+    source.onended = () => graph.active.delete(source);
+    source.start(now);
+  }, [getAudioGraph]);
 
   const startAmbient = useCallback(() => {
     const context = audioContext();
@@ -257,7 +314,7 @@ export default function Home() {
     if (!ambientRef.current) {
       const gain = context.createGain();
       gain.gain.value = 0;
-      gain.connect(context.destination);
+      gain.connect(getAudioGraph()?.graph.master || context.destination);
       const frequencies = [110, 164.81];
       const oscillators = frequencies.map((frequency, index) => {
         const oscillator = context.createOscillator();
@@ -281,7 +338,7 @@ export default function Home() {
         step += 1;
       }, 560);
     }
-  }, [audioContext, playTone]);
+  }, [audioContext, getAudioGraph, playTone]);
 
   const silenceAmbient = useCallback(() => {
     const context = audioRef.current;
@@ -380,6 +437,7 @@ export default function Home() {
     if (screenRef.current === "playing") pauseRun();
     modalRef.current = "shop";
     setModal("shop");
+    setArmoryNotice("");
     playTone(698.46, 0.1, "triangle", 0.03);
   }, [pauseRun, playTone]);
 
@@ -392,16 +450,27 @@ export default function Home() {
 
   const purchaseOrEquip = (style: KnightStyle) => {
     const current = profileRef.current;
+    console.info("[Skybound Armory] Transaction requested", { styleId: style.id, balance: current.points, cost: style.cost, alreadyUnlocked: current.unlocked.includes(style.id) });
     if (current.unlocked.includes(style.id)) {
-      setProfile((previous) => ({ ...previous, selected: style.id }));
+      const next = { ...current, selected: style.id };
+      profileRef.current = next;
+      setProfile(next);
+      setArmoryNotice(`${style.name} equipped.`);
+      console.info("[Skybound Armory] Existing style equipped", { styleId: style.id });
       playTone(587.33, 0.09, "sine", 0.035, 783.99);
       return;
     }
     if (current.points < style.cost) {
+      setArmoryNotice(`Need ${style.cost - current.points} more height points for ${style.name}.`);
+      console.warn("[Skybound Armory] Purchase denied: insufficient height points", { styleId: style.id, balance: current.points, cost: style.cost });
       playTone(220, 0.14, "triangle", 0.032, 155);
       return;
     }
-    setProfile((previous) => ({ ...previous, points: previous.points - style.cost, unlocked: [...previous.unlocked, style.id], selected: style.id }));
+    const next = { ...current, points: current.points - style.cost, unlocked: [...current.unlocked, style.id], selected: style.id };
+    profileRef.current = next;
+    setProfile(next);
+    setArmoryNotice(`${style.name} unlocked and equipped. ${next.points.toLocaleString()} height points remain.`);
+    console.info("[Skybound Armory] Purchase complete", { styleId: style.id, cost: style.cost, balanceBefore: current.points, balanceAfter: next.points, equippedStyle: next.selected });
     playTone(659.25, 0.12, "sine", 0.05, 987.77);
     window.setTimeout(() => playTone(987.77, 0.18, "triangle", 0.04, 1318.51), 90);
   };
@@ -417,9 +486,10 @@ export default function Home() {
     setBoostReady(false);
     emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, player.y - 16, "trail", 10);
     if (navigator.vibrate) navigator.vibrate(12);
+    playNoise(0.075, 0.026, 1900, "boost-air", 0.06);
     playTone(620, 0.11, "triangle", 0.05, 980);
     window.setTimeout(() => playTone(980, 0.12, "sine", 0.026, 1240), 68);
-  }, [playTone]);
+  }, [playNoise, playTone]);
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
@@ -437,6 +507,22 @@ export default function Home() {
     window.addEventListener("keyup", keyUp);
     return () => { window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp); };
   }, [pauseRun, useBoost]);
+
+  useEffect(() => {
+    const blockContextMenu = (event: MouseEvent) => event.preventDefault();
+    const blockInspectionShortcut = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const windowsShortcut = event.ctrlKey && event.shiftKey && ["i", "j", "c"].includes(key);
+      const macShortcut = event.metaKey && event.altKey && key === "i";
+      if (event.key === "F12" || windowsShortcut || macShortcut) {
+        event.preventDefault();
+        console.info("[Skybound Knight] Browser inspection shortcut prevented.");
+      }
+    };
+    window.addEventListener("contextmenu", blockContextMenu);
+    window.addEventListener("keydown", blockInspectionShortcut);
+    return () => { window.removeEventListener("contextmenu", blockContextMenu); window.removeEventListener("keydown", blockInspectionShortcut); };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -515,6 +601,7 @@ export default function Home() {
             if (platform.kind === "fading" && !platform.fadingAt) platform.fadingAt = now;
             puff(world, player.x, platform.y + 4, platform.kind === "spring" ? 16 : 10, platform.kind === "spring" ? 47 : 37);
             emitStyleParticles(world, getKnightStyle(profileRef.current.selected), player.x, platform.y + 5, "landing", platform.kind === "spring" ? 15 : 9);
+            playNoise(platform.kind === "spring" ? 0.1 : 0.055, platform.kind === "spring" ? 0.03 : 0.022, platform.kind === "spring" ? 2100 : 1300, platform.kind === "spring" ? "spring-noise" : "landing-noise", 0.07);
             playTone(platform.kind === "spring" ? 660 : 440, platform.kind === "spring" ? 0.22 : 0.1, platform.kind === "spring" ? "triangle" : "sine", 0.035, platform.kind === "spring" ? 990 : 530);
             break;
           }
@@ -546,6 +633,7 @@ export default function Home() {
           setRecordFlash(true);
           window.setTimeout(() => setRecordFlash(false), 1600);
           puff(world, player.x, player.y, 22, 45);
+          playNoise(0.065, 0.018, 2500, "record-shimmer", 0.12);
           playTone(523.25, 0.12, "sine", 0.05, 783.99);
           window.setTimeout(() => playTone(783.99, 0.24, "triangle", 0.04, 1046.5), 110);
         }
@@ -565,6 +653,7 @@ export default function Home() {
         screenRef.current = "gameover";
         setScreen("gameover");
         silenceAmbient();
+        playNoise(0.16, 0.027, 720, "fall-noise", 0.18);
         playTone(311.13, 0.36, "triangle", 0.055, 120);
       }
     };
@@ -646,6 +735,46 @@ export default function Home() {
       context.shadowBlur = 14 * scale;
       const style = getKnightStyle(profileRef.current.selected);
       // A self-drawn knight keeps the player crisp and guarantees no sprite backdrop enters the game world.
+      if (style.avatar === "mage") {
+        context.fillStyle = style.colors.cape;
+        context.beginPath();
+        context.moveTo(-20 * scale, 25 * scale);
+        context.lineTo(0, -4 * scale);
+        context.lineTo(20 * scale, 25 * scale);
+        context.closePath();
+        context.fill();
+        context.strokeStyle = style.colors.visor;
+        context.lineWidth = 2 * scale;
+        context.stroke();
+        context.fillStyle = style.colors.armor;
+        context.beginPath();
+        context.arc(0, -11 * scale, 13 * scale, 0, Math.PI * 2);
+        context.fill();
+        context.stroke();
+        context.fillStyle = style.colors.visor;
+        context.beginPath();
+        context.moveTo(-18 * scale, -13 * scale);
+        context.lineTo(0, -47 * scale);
+        context.lineTo(18 * scale, -13 * scale);
+        context.closePath();
+        context.fill();
+        context.fillStyle = style.colors.crest;
+        context.beginPath();
+        context.arc(0, -28 * scale, 3.5 * scale, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = style.colors.boots;
+        context.lineWidth = 3 * scale;
+        context.beginPath();
+        context.moveTo(23 * scale, -2 * scale);
+        context.lineTo(28 * scale, 28 * scale);
+        context.stroke();
+        context.fillStyle = style.colors.crest;
+        context.beginPath();
+        context.arc(23 * scale, -3 * scale, 4 * scale, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+        return;
+      }
       context.fillStyle = style.colors.visor;
       context.beginPath();
       context.ellipse(15 * scale, 12 * scale, 10 * scale, 18 * scale, -0.38, 0, Math.PI * 2);
@@ -809,7 +938,7 @@ export default function Home() {
     };
     frameRef.current = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(frameRef.current); observer.disconnect(); };
-  }, [makePlatform, playTone, silenceAmbient]);
+  }, [makePlatform, playNoise, playTone, silenceAmbient]);
 
   useEffect(() => () => {
     if (melodyTimerRef.current) window.clearInterval(melodyTimerRef.current);
@@ -817,8 +946,10 @@ export default function Home() {
   }, []);
 
   const toggleMute = () => {
-    setMuted((current) => !current);
-    playTone(muted ? 660 : 300, 0.08, "sine", 0.03);
+    const nextMuted = !mutedRef.current;
+    mutedRef.current = nextMuted;
+    setMuted(nextMuted);
+    if (!nextMuted) playTone(660, 0.08, "sine", 0.03);
   };
 
   const showSettingsFromMenu = () => {
@@ -837,11 +968,12 @@ export default function Home() {
   const beginTouch = (direction: "left" | "right") => { keysRef.current[direction] = true; };
 
   return (
-    <main className="skybound-shell" data-app="skybound-knight" data-screen={screen} data-player={profile.name} data-equipped-style={profile.selected}>
+    <main className="skybound-shell" data-app="skybound-knight" data-screen={screen} data-player={profile.name} data-equipped-style={profile.selected} data-content-protection="basic-deterrent">
       <canvas ref={canvasRef} className="game-canvas" aria-label="Skybound Knight game world" data-renderer="canvas" data-inspect-role="visual-game-layer" />
       <div className="sky-grain" aria-hidden="true" />
       <output className="inspectable-game-state" data-inspect-role="game-state" data-height={hud.current} data-best-height={hud.best} data-height-points={profile.points} data-unlocked-styles={profile.unlocked.length} aria-live="polite">{`${profile.name}: ${hud.current} metres, ${profile.points} height points, ${profile.unlocked.length} styles unlocked.`}</output>
 
+      {armoryNotice && <output className="armory-notice" role="status" aria-live="polite">{armoryNotice}</output>}
       <header className="game-hud" aria-label="Game status" data-ui-region="game-hud">
         <div className="brand-lockup">
           <div className="brand-mark brand-crest" role="img" aria-label="Skybound Knight compass crest"><span>✦</span></div>
