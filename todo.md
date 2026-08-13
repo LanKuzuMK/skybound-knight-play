@@ -47,4 +47,4 @@
 - [x] Add persistent independent Music and SFX volume controls in settings.
 - [x] Add a smooth high-altitude night-sky BGM arrangement transition.
 - [x] Add a restrained beat-responsive HUD equalizer for the background music.
-- [ ] Validate, deploy, and checkpoint the adaptive audio experience.
+- [x] Validate, deploy, and checkpoint the adaptive audio experience.
