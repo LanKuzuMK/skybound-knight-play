@@ -76,6 +76,6 @@
 - [x] Verify that intentionally generated Android files are recreated by sync and document the build path.
 - [x] Create a polished GitHub README, license, and concise contributor-facing documentation.
 - [x] Verify the repository landing page presentation and publish the documentation update.
-- [ ] Audit tracked history and files for signing keys, environment files, and other sensitive material.
-- [ ] Replace the MIT license and open-source metadata with proprietary All Rights Reserved terms.
-- [ ] Change the GitHub repository to public, verify its public presentation, and save a checkpoint.
+- [x] Audit tracked history and files for signing keys, environment files, and other sensitive material.
+- [x] Replace the MIT license and open-source metadata with proprietary All Rights Reserved terms.
+- [x] Change the GitHub repository to public, verify its public presentation, and save a checkpoint.
