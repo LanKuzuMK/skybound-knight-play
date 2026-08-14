@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "A responsive endless vertical fantasy platformer built with React, Vite, Canvas, and Capacitor.",
   "type": "module",
-  "license": "MIT",
+  "private": true,
+  "license": "UNLICENSED",
   "author": "LanKuzuMK",
   "homepage": "https://skybound-knight-play.pages.dev",
   "repository": {

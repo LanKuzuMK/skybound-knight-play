@@ -1,6 +1,6 @@
-# Contributing to Skybound Knight
+# Skybound Knight Development Workflow
 
-Thank you for helping improve the sky route. This project is a React, TypeScript, Vite, Tailwind, and Capacitor game, with the primary game loop concentrated in `client/src/pages/Home.tsx`.
+Skybound Knight is a proprietary React, TypeScript, Vite, Tailwind, and Capacitor game. This document is a workflow reference for the repository owner and explicitly authorized collaborators; it does not grant permission to reuse, modify, or contribute code without written approval.
 
 ## Local setup
 
@@ -11,7 +11,7 @@ pnpm install
 pnpm run dev
 ```
 
-Before sharing a change, run both checks:
+Before sharing an authorized change, run both checks:
 
 ```bash
 pnpm run check
@@ -44,5 +44,4 @@ Use a concise imperative summary, such as `Refine mobile boost feedback` or `Rep
 
 ## Reporting issues
 
-When reporting a bug, include the device or browser, the route to reproduce it, what you expected, what happened, and a screenshot or error log when possible. Do not include keystore files, signing passwords, tokens, or personal player data.
-
+Bug reports are welcome through the repository issues page. Include the device or browser, route to reproduce it, expected behavior, actual behavior, and a screenshot or error log when possible. Do not include keystore files, signing passwords, tokens, or personal player data.

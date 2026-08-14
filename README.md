@@ -4,7 +4,7 @@
 
 [![Live web game](https://img.shields.io/badge/Play-Live%20web%20game-3d67be?style=flat-square)](https://skybound-knight-play.pages.dev)
 [![Android ready](https://img.shields.io/badge/Android-Capacitor%208-3ddc84?style=flat-square)](./APK_BUILD.md)
-[![License](https://img.shields.io/badge/License-MIT-f5b544?style=flat-square)](./LICENSE)
+[![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-7c3f55?style=flat-square)](./LICENSE)
 
 **Skybound Knight** is a responsive, browser-first platformer with a handcrafted **Dawnveil Reverie** visual language. Guide a tiny knight through an endless sky route, build height points, unlock visual styles, and chase a new horizon record on desktop or touch devices.
 
@@ -38,7 +38,7 @@ pnpm install
 pnpm run dev
 ```
 
-Run the production checks before making a pull request or packaging a build:
+Run the production checks before making a project change or packaging a build:
 
 ```bash
 pnpm run check
@@ -79,11 +79,10 @@ CHANGELOG.md               Notable release history
 
 Skybound Knight stores player name, high score, height points, unlocks, equipped style, and audio preferences in browser or device-local storage. The game does not require an account or a remote database for core play.
 
-## Contributing
+## Project workflow
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for local setup, quality checks, Android-specific rules, and a concise change workflow.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the internal local setup, quality checks, Android-specific rules, and concise change workflow. This public source repository does not grant reuse or contribution rights without the owner’s written approval.
 
 ## License
 
-This project is available under the [MIT License](./LICENSE). The original project artwork, title, and branding remain part of the Skybound Knight identity; consult the repository owner before redistributing branded game assets as a separate product.
-
+Skybound Knight is published under its [Proprietary All Rights Reserved License](./LICENSE). The repository is public for demonstration and evaluation, but reuse, modification, redistribution, resale, and derivative products require the owner’s prior written permission.

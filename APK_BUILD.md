@@ -15,6 +15,8 @@ Use `pnpm run android:sync` after every web-game change. If cloning an older bra
 
 > **Why does GitHub not show every Android file?** Android SDK paths, copied web bundles, and the Capacitor Cordova bridge are generated for each local machine and intentionally ignored by Git. A successful `pnpm run android:sync` recreates them before Gradle builds the APK.
 
+> **Signing security:** Keep `.jks` / `.keystore` files, `keystore.properties`, signing passwords, `.apk`, and `.aab` files outside Git. They are intentionally ignored and must never be committed to the public repository.
+
 ## Native launch safeguards
 
 The Android wrapper locks the activity to portrait mode and uses a cutout-aware theme. In-game code also locks native orientation defensively, pauses when the app backgrounds, intercepts the Android Back action to pause or close overlays first, keeps the display awake only during an active climb when available, preloads visual assets before interaction, and applies restrained touch haptics for boost, landings, records, and falls.
